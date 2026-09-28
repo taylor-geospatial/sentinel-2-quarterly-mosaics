@@ -47,6 +47,8 @@ VERIFY="${VERIFY:-200}"
 ITEMS="$WORK/items"
 
 echo "=== $YEAR $QUARTER  work=$WORK publish=$PUBLISH zoom=$ZOOM smoke=$SMOKE"
+# Fail now rather than after six hours of building.
+[ "$DRY_RUN" = 1 ] || check_creds
 
 # 1. Items. The manifest is a 2.8 MB download; everything else is derived.
 if [ -s "$WORK/$PART/items.ndjson" ]; then
@@ -86,6 +88,7 @@ run python3 "$REPO/tools/make_footprints.py" --work "$WORK" --out "$PUBLISH"
 UP=(
   "mosaics/$PART/items.parquet"
   "mosaics/$PART/overview.tif"
+  "mosaics/$PART/thumbnail.webp"
   "coverage/tiles.parquet"
   "coverage/footprints.pmtiles"
 )
@@ -101,11 +104,5 @@ run python3 "$REPO/tools/rails/upload.py" --data-dir "$PUBLISH" \
 run python3 "$REPO/tools/rails/upload_items.py" --items-dir "$ITEMS" \
   --year "$YEAR" --quarter "$QUARTER" --key-prefix "$KEY_PREFIX" \
   --workers "${UPLOAD_WORKERS:-32}"
-
-# The thumbnail is catalog metadata, not a data file, so it goes to the
-# collection rather than the partition and upload.py's suffix allow-list
-# does not cover it. It is copied into the checkout for tools/publish.py.
-THUMB="$PUBLISH/mosaics/$PART/thumbnail.webp"
-[ -s "$THUMB" ] && echo "thumbnail ready at $THUMB (publish with tools/publish.py)"
 
 echo "=== $YEAR $QUARTER done"

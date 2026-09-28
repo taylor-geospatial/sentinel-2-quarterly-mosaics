@@ -25,10 +25,96 @@ The published browse overviews are WebP. `make_overview.py` falls back to
 JPEG with a warning when the driver is missing, which would put the wrong
 bytes in the catalog rather than stopping.
 
-Credentials: the uploads use the `source-coop` profile in
-`~/.aws/credentials`. The node's `[default]` profile is a different
-account and gets AccessDenied on the `tge-labs` prefix. Nothing but the
-upload steps needs an AWS identity; every read is anonymous https.
+## Credentials: the Source Cooperative data proxy
+
+Since the 0.3 CLI, Source Cooperative is **not** ordinary AWS S3. It is a
+data proxy, and three things follow:
+
+- The credentials are proxy STS tokens — the access key id begins
+  `STSPRXY` — and they are valid against `https://data.source.coop` and
+  nothing else.
+- **The bucket is the account name.** `tge-labs` is the bucket and
+  `sentinel-2-quarterly-cloudless-mosaics/...` is the key. The old
+  addressing, bucket `us-west-2.opendata.source.coop` with the account as
+  the first path segment, is gone; `tools/publish.py` refuses a
+  `write_prefix` in that shape rather than quietly pointing somewhere
+  wrong.
+- Every client has to be given the endpoint. botocore does read
+  `endpoint_url` from the profile by itself, but every tool here passes
+  it explicitly, from `endpoint_url` in `catalog.publish.yaml`, so where
+  the bytes land never depends on a file this repository does not own.
+
+Install the CLI on rails (the installer drops a static binary in
+`~/.local/bin`, no cargo toolchain needed):
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/source-cooperative/source-coop-cli/releases/latest/download/source-coop-cli-installer.sh | sh
+source-coop --version          # must be 0.3.0 or newer
+```
+
+### The one headless login
+
+`login` receives the OAuth redirect on a local port, so forward that port
+from your laptop and finish the sign-in in your own browser. From the
+**laptop**:
+
+```bash
+ssh -L 8400:127.0.0.1:8400 rails
+```
+
+Then on **rails**, in that session:
+
+```bash
+source-coop login --port 8400
+```
+
+It prints a URL. Open it in the laptop's browser and sign in; the
+redirect to `http://127.0.0.1:8400/callback` travels back down the tunnel
+to the CLI on rails. Then write the profile on rails:
+
+```ini
+# ~/.aws/config
+[profile source-coop]
+region = us-west-2
+credential_process = source-coop creds
+endpoint_url = https://data.source.coop
+```
+
+Check it end to end before submitting anything:
+
+```bash
+aws s3api put-object --profile source-coop --bucket tge-labs \
+  --key sentinel-2-quarterly-cloudless-mosaics/_work/rails-write-test.txt \
+  --body /dev/null
+aws s3api delete-object --profile source-coop --bucket tge-labs \
+  --key sentinel-2-quarterly-cloudless-mosaics/_work/rails-write-test.txt
+```
+
+Rails has no OS keyring, so the CLI falls back automatically to
+`~/.cache/source-coop/credentials/<role>.json`, mode 0600. `source-coop
+creds` refreshes from the cached refresh token without another browser
+login, for about a month. Log in again only when a refresh fails.
+
+**Log in with 0.3.0 or newer.** Older builds default `--scope` to
+`openid` alone, and it is `offline_access` that puts a refresh token in
+the cache; without it the credentials expire in hours and every job after
+that fails on an expired token. `source-coop --version` is the check, and
+it is worth running rather than assuming — on the maintainer's laptop a
+0.2.0 left in `~/.cargo/bin` shadowed the 0.3.0 from Homebrew.
+
+Nothing but the upload steps needs an identity at all; every read in this
+pipeline is anonymous https.
+
+### Reading the public endpoint from Python
+
+`data.source.coop` sits behind Cloudflare, which rejects the default
+`Python-urllib/*` User-Agent with `403 error code: 1010` — a client
+fingerprint ban that looks exactly like a permissions failure and is not
+one. Measured on objects that are unquestionably public, including the
+transfer manifests. curl, DuckDB's httpfs, GDAL's `/vsicurl` and
+`requests` all send their own User-Agent and are unaffected; bare
+`urllib.request.urlopen` needs one set explicitly.
 
 ## The rehearsal
 

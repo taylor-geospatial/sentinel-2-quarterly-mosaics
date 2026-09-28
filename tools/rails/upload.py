@@ -42,6 +42,13 @@ from publish import Upload, content_type_for, load_config, split_s3_uri  # noqa:
 from upload_data import is_data_publishable  # noqa: E402
 
 DEFAULT_PROFILE = "source-coop"
+# `upload_data.py`'s allow-list covers the bulk formats (.parquet,
+# .pmtiles, .tif, .laz). The per-quarter browse images are neither those
+# nor catalog metadata: they are built into $PUBLISH beside the parquet
+# they belong to, so `publish.py`, which only ever walks `catalog/`, never
+# sees them. Rather than widen the template's list for every catalog, this
+# lane admits its own two extra suffixes.
+EXTRA_SUFFIXES = {".webp", ".jpg"}
 # Multipart settings for the multi-GB overview COGs over the cluster's
 # uplink. A quarter's items.parquet is a few MB and never reaches the
 # threshold.
@@ -64,7 +71,8 @@ def plan_uploads(data_dir: Path, files: list[str], prefix: str,
             sys.exit(f"{name}: not under --data-dir {base}")
         if not path.is_file():
             sys.exit(f"{name}: no such file under {base}")
-        if not is_data_publishable(rel):
+        if not (is_data_publishable(rel)
+                or rel.suffix.lower() in EXTRA_SUFFIXES):
             sys.exit(f"{name}: not a publishable data file")
         parts = [p for p in (prefix, key_prefix.strip("/")) if p]
         uploads.append(Upload(path, "/".join(parts + [rel.as_posix()]),
@@ -111,10 +119,19 @@ def upload_one(client, bucket: str, upload: Upload, force: bool,
     return "uploaded"
 
 
-def make_client(profile: str, region: str | None):
+def make_client(profile: str, region: str | None, endpoint: str | None):
+    """The S3 client every upload here goes through.
+
+    Source Cooperative is a data proxy since its 0.3 CLI: the credentials
+    are proxy STS tokens valid only against `endpoint_url`, the bucket is
+    the account (`tge-labs`) and the product is the key prefix. botocore
+    picks `endpoint_url` up from the profile by itself, but it is passed
+    explicitly so that where the bytes land does not depend on a line in
+    somebody's `~/.aws/config`.
+    """
     import boto3
-    return boto3.Session(profile_name=profile,
-                         region_name=region or None).client("s3")
+    return boto3.Session(profile_name=profile, region_name=region or None
+                         ).client("s3", endpoint_url=endpoint or None)
 
 
 def main(argv: list[str] | None = None, client=None) -> int:
@@ -128,6 +145,9 @@ def main(argv: list[str] | None = None, client=None) -> int:
                     help="directory between the catalog prefix and the file's path")
     ap.add_argument("--force", action="store_true",
                     help="upload even when the bucket holds an object of the same size")
+    ap.add_argument("--endpoint",
+                    help="S3 endpoint; defaults to endpoint_url in "
+                         "catalog.publish.yaml")
     ap.add_argument("--dry-run", action="store_true",
                     help="HEAD only; print what would upload")
     ap.add_argument("files", nargs="+", help="files under --data-dir")
@@ -137,10 +157,12 @@ def main(argv: list[str] | None = None, client=None) -> int:
     bucket, prefix = split_s3_uri(config["write_prefix"])
     uploads = plan_uploads(Path(a.data_dir), a.files, prefix, a.key_prefix)
     suffix = a.key_prefix.strip("/")
-    print(f"profile: {a.profile}; target: s3://{bucket}/{prefix}"
-          f"{'/' + suffix if suffix else ''}")
+    endpoint = a.endpoint or config.get("endpoint_url")
+    print(f"profile: {a.profile}; endpoint: {endpoint or '(aws default)'}; "
+          f"target: s3://{bucket}/{prefix}{'/' + suffix if suffix else ''}")
     if client is None:
-        client = make_client(a.profile, config.get("region"))
+        client = make_client(a.profile, config.get("region"),
+                             a.endpoint or config.get("endpoint_url"))
     outcomes = [upload_one(client, bucket, u, a.force, a.dry_run) for u in uploads]
     print(f"{len(outcomes)} file(s): {outcomes.count('uploaded')} uploaded, "
           f"{outcomes.count('skipped')} skipped"

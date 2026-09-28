@@ -185,7 +185,7 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - stop before any upload
         sys.exit(f"cannot build an AWS session: {exc}")
 
-    failed = upload_all(session, bucket, changed)
+    failed = upload_all(session, bucket, changed, config)
     if failed:
         print(f"\n{len(failed)} of {len(changed)} file(s) failed:",
               file=sys.stderr)

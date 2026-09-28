@@ -11,8 +11,13 @@
 # nodes without `module load`. See README.md for how to create it.
 export PATH="${S2M_ENV:-/u/cholmes/micromamba/envs/s2mosaics}/bin:$PATH"
 export AWS_DEFAULT_REGION=us-west-2
-# Jobs that upload set AWS_PROFILE=source-coop themselves. Building needs
-# no AWS identity at all: everything is read over https.
+# Source Cooperative is a data proxy since its 0.3 CLI: this profile's
+# credential_process issues proxy STS tokens that are valid only against
+# https://data.source.coop, and the bucket is the account name
+# (`tge-labs`) with the product as the key prefix. The endpoint itself
+# comes from `endpoint_url` in catalog.publish.yaml, which every tool
+# passes explicitly. See README.md for the one headless login.
+# Building needs no AWS identity at all; every read is anonymous https.
 export AWS_PROFILE="${AWS_PROFILE:-source-coop}"
 # DuckDB, GDAL and Python all honour TZ. Every quarter boundary in this
 # catalog is a UTC instant, and a node that thinks otherwise would write
@@ -49,6 +54,23 @@ export PUBLIC_BASE="${PUBLIC_BASE:-https://data.source.coop/tge-labs/sentinel-2-
 # upload.py --key-prefix: a directory inserted between the catalog prefix
 # and the file's path. Empty for the real catalog.
 export KEY_PREFIX="${KEY_PREFIX:-}"
+
+# A job that builds for hours and then cannot upload has wasted the
+# allocation, so the credentials are checked before any work starts.
+# `source-coop creds` exits non-zero when the cached refresh token is
+# gone, which is the one failure that needs a human and a browser.
+check_creds() {
+  if ! command -v source-coop >/dev/null; then
+    echo "source-coop is not on PATH; see tools/rails/README.md" >&2
+    return 1
+  fi
+  if ! source-coop creds >/dev/null 2>&1; then
+    echo "source-coop has no usable cached credentials." >&2
+    echo "Log in again: ssh -L 8400:127.0.0.1:8400 rails, then" >&2
+    echo "  source-coop login --port 8400" >&2
+    return 1
+  fi
+}
 
 # Base resolution of the browse overview, as a Web Mercator zoom level.
 # 10 is 152.87 m/px. Each step down is a quarter of the pixels.

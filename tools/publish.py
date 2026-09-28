@@ -117,7 +117,39 @@ def load_config(path: Path = CONFIG) -> dict[str, str]:
     missing = {"write_prefix", "public_base", "publish_dir"} - config.keys()
     if missing:
         sys.exit(f"{path.name} is missing: {', '.join(sorted(missing))}")
+    _refuse_legacy_source_coop(path, config)
     return config
+
+
+def _refuse_legacy_source_coop(path: Path, config: dict[str, str]) -> None:
+    """Stop on a write_prefix written for Source Cooperative's old layout.
+
+    Before the 0.3 CLI, Source Cooperative was addressed as ordinary AWS
+    S3: bucket ``us-west-2.opendata.source.coop``, account and product as
+    the key prefix. It is now a data proxy, so the bucket is the account
+    and the product is the prefix, reached through ``endpoint_url``.
+
+    The two forms differ only in where the slash falls, and the old one
+    does not fail cleanly against the proxy -- it asks a real AWS endpoint
+    for a bucket these credentials cannot touch, or asks the proxy for a
+    bucket named after a hostname. Either way the message names neither
+    cause. So the old shape is refused here, with the new one spelled out.
+    Translating it silently would be worse: a publish target is not
+    something to guess at.
+    """
+    bucket, _, rest = config["write_prefix"].removeprefix("s3://").partition("/")
+    if not bucket.endswith(".opendata.source.coop"):
+        return
+    account, _, product = rest.strip("/").partition("/")
+    sys.exit(
+        f"{path.name}: write_prefix uses Source Cooperative's pre-0.3 "
+        f"addressing.\n"
+        f"  got:      s3://{bucket}/{account}/{product}\n"
+        f"  expected: s3://{account}/{product}\n"
+        f"            endpoint_url: https://data.source.coop\n"
+        "The account is the bucket now, and the proxy endpoint is how the "
+        "credentials reach it. See tools/rails/README.md."
+    )
 
 
 def split_s3_uri(uri: str) -> tuple[str, str]:
@@ -220,12 +252,32 @@ def aws_session(config: dict[str, str]):
     )
 
 
+def s3_client(session, config: dict[str, str]):
+    """An S3 client for this catalog's storage.
+
+    ``endpoint_url`` is optional and absent for ordinary AWS S3. Source
+    Cooperative needs it: since the 0.3 CLI its credentials are proxy STS
+    tokens (the access key id begins ``STSPRXY``) that are only valid
+    against ``https://data.source.coop``, and the bucket is the account
+    name with the product as the key prefix.
+
+    botocore does read ``endpoint_url`` from the profile in
+    ``~/.aws/config`` on its own -- measured on 1.43.75 -- but it is
+    passed explicitly here anyway. Whether a publish reaches the right
+    host should not depend on a line in a file this repository does not
+    own.
+    """
+    return session.client(
+        "s3", endpoint_url=config.get("endpoint_url") or None
+    )
+
+
 def remote_index(
     bucket: str, prefix: str, config: dict[str, str]
 ) -> dict[str, tuple[int, str]]:
     """Size and ETag for every object under the prefix, or {} when unreadable."""
     try:
-        client = aws_session(config).client("s3")
+        client = s3_client(aws_session(config), config)
         index = {}
         paginator = client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -241,7 +293,8 @@ def remote_index(
         return {}
 
 
-def upload_all(session, bucket: str, uploads: list[Upload]) -> list[str]:
+def upload_all(session, bucket: str, uploads: list[Upload],
+               config: dict[str, str]) -> list[str]:
     """Upload every object on a bounded pool. Returns the keys that failed.
 
     Every upload is attempted. One failure does not cancel the rest, so the
@@ -259,7 +312,7 @@ def upload_all(session, bucket: str, uploads: list[Upload]) -> list[str]:
         if existing is not None:
             return existing
         with new_client:
-            thread_state.client = session.client("s3")
+            thread_state.client = s3_client(session, config)
         return thread_state.client
 
     def put(upload: Upload) -> None:
@@ -351,7 +404,7 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - stop before any upload
         sys.exit(f"cannot build an AWS session: {exc}")
 
-    failed = upload_all(session, bucket, changed)
+    failed = upload_all(session, bucket, changed, config)
     if failed:
         print(f"\n{len(failed)} of {len(changed)} file(s) failed:",
               file=sys.stderr)

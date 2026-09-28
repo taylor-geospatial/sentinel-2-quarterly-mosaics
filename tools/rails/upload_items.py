@@ -47,6 +47,7 @@ CONTENT_TYPE = "application/geo+json"
 PROGRESS_EVERY = 2_000
 
 _local = threading.local()
+_new_client = threading.Lock()
 
 
 def say(msg: str) -> None:
@@ -69,20 +70,32 @@ def collect(items_dir: Path, year: int, quarter: str, prefix: str,
     return out
 
 
-def _client(profile: str, region: str | None):
-    """One boto3 client per worker thread. A client is thread-safe for
-    calls but the connection pool is not worth sharing across 32 workers,
-    and a per-thread client keeps each one's pool to itself."""
-    if not hasattr(_local, "client"):
-        import boto3
-        _local.client = boto3.Session(
-            profile_name=profile, region_name=region or None).client("s3")
+def _client(session, endpoint: str | None):
+    """One boto3 client per worker thread, all from **one** Session.
+
+    A client is safe to call from many threads but its connection pool is
+    not worth sharing across 32 of them, so each worker gets its own. The
+    Session, though, is deliberately shared: with Source Cooperative's
+    `credential_process`, building a Session per thread would run the
+    `source-coop` binary once per thread and give each worker its own
+    credential cache to expire and refresh independently. One Session
+    resolves the credentials once and every client reads them from it.
+    Creating clients from a Session is not itself thread-safe, so a lock
+    covers only that.
+
+    `endpoint` is Source Cooperative's data proxy. Its credentials are
+    proxy STS tokens that are valid against nothing else."""
+    existing = getattr(_local, "client", None)
+    if existing is not None:
+        return existing
+    with _new_client:
+        _local.client = session.client("s3", endpoint_url=endpoint or None)
     return _local.client
 
 
-def put_one(job: tuple[Path, str, str, str | None, str, bool]) -> str:
-    path, key, profile, region, bucket, skip_existing = job
-    client = _client(profile, region)
+def put_one(job) -> str:
+    path, key, session, bucket, skip_existing, endpoint = job
+    client = _client(session, endpoint)
     if skip_existing:
         try:
             if int(client.head_object(Bucket=bucket, Key=key)["ContentLength"]
@@ -106,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--profile",
                     default=os.environ.get("AWS_PROFILE") or DEFAULT_PROFILE)
     ap.add_argument("--key-prefix", default="")
+    ap.add_argument("--endpoint",
+                    help="S3 endpoint; defaults to endpoint_url in "
+                         "catalog.publish.yaml")
     ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     ap.add_argument("--skip-existing", action="store_true",
                     help="HEAD before each put; for resuming, not for a "
@@ -118,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     jobs = collect(Path(a.items_dir), a.year, a.quarter, prefix, a.key_prefix)
     total_bytes = sum(p.stat().st_size for p, _ in jobs)
     say(f"{a.year} {a.quarter}: {len(jobs):,} item(s), "
-        f"{total_bytes / 1e6:,.1f} MB -> s3://{bucket}/{prefix}")
+        f"{total_bytes / 1e6:,.1f} MB -> s3://{bucket}/{prefix} "
+        f"via {config.get('endpoint_url') or '(aws default)'}")
     if not jobs:
         return 0
     if a.dry_run:
@@ -127,10 +144,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  ... {len(jobs):,} object(s) in total")
         return 0
 
-    region = config.get("region")
+    import boto3
+    session = boto3.Session(profile_name=a.profile,
+                            region_name=config.get("region") or None)
+    # Resolve the credentials once, on this thread, so the workers do not
+    # race to run `source-coop creds` at the same moment.
+    session.get_credentials().get_frozen_credentials()
     t0 = time.monotonic()
     done = {"uploaded": 0, "skipped": 0}
-    work = [(p, k, a.profile, region, bucket, a.skip_existing) for p, k in jobs]
+    endpoint = a.endpoint or config.get("endpoint_url")
+    work = [(p, k, session, bucket, a.skip_existing, endpoint)
+            for p, k in jobs]
     with cf.ThreadPoolExecutor(a.workers) as pool:
         for n, outcome in enumerate(pool.map(put_one, work), start=1):
             done[outcome] += 1
