@@ -132,6 +132,21 @@ markers read on 2026-09-28. Tile counts run from 25,172 (2017 Q3) to 30,668
 (2019 Q1); the growth over the record is the mosaic footprint expanding, not
 gaps in the early years.
 
-2026 is **not** in this collection. The `2026/Q1/` and `2026/Q2/` prefixes hold
-an unfinished transfer with no completion marker and an unverified tile
-structure. They are excluded until they finish and are checked.
+2026 is **not** in this collection, and the two prefixes differ:
+
+`2026/Q2/` completed on 2026-09-28 at 14:44 UTC, after this collection was
+written: 115,572 objects, 28,893 tiles, 17.25 TB, with a completion marker and
+a manifest. Its bytes are readable. It is held out because its tiles use
+**256 × 256 internal blocks** where 2017 through 2025 use 1024 × 1024, measured
+with `gdalinfo` on `2026/Q2/31UFU_0_0/B04.tif`. Nothing else differs: same COG
+layout, same DEFLATE and predictor, same size, type, nodata and overview levels.
+Folding the quarter in means describing that difference, not just extending the
+extent, because a reader tuned to 1024 × 1024 blocks will issue many more, much
+smaller range requests against it.
+
+`2026/Q1/` is an unfinished transfer: 799 objects, no completion marker, no
+manifest.
+
+Because `manifest_2026_Q2.parquet` now exists, a glob over
+`manifest/manifest_*.parquet` matches 37 files. Filter on `year <= 2025` to get
+the 36 quarters this collection describes.

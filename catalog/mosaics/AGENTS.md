@@ -71,6 +71,7 @@ SELECT year, quarter, item_id,
        size_bytes
 FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
+  AND year <= 2025   -- 2026 Q2 landed after this catalog was written
 ORDER BY year, quarter;
 ```
 

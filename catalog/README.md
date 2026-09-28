@@ -61,12 +61,28 @@ A quarter holds between 25,172 tiles (2017 Q3) and 30,668 (2019 Q1). The count
 grows over the record because the mosaic footprint expanded, not because
 anything is missing from the early years.
 
-**2026 is not part of this dataset.** Two prefixes hold an unfinished transfer
-that no completion marker covers and this catalog does not describe: `2026/Q1/`
-with 799 objects (89.7 GB) and `2026/Q2/` with 107,908 objects across 26,988
-tiles (16.2 TB), counted on 2026-09-28. Neither has a manifest. Do not read them
-as data. They will be published, with their own completion markers, once they
-finish and their tile structure is verified.
+**2026 is in the bucket but not yet in this catalog.** Two prefixes sit outside
+the 36 quarters described here, and they are in different states:
+
+- **`2026/Q2/` finished transferring on 2026-09-28 at 14:44 UTC**, after this
+  catalog's collections were written. It has a completion marker and a
+  manifest: 115,572 objects across 28,893 tiles, 17.25 TB. The bytes are
+  readable. What is missing is the catalog work, because its tiles are built
+  differently from every other quarter (see below) and that difference has to
+  be described before the quarter is folded in.
+- **`2026/Q1/`** holds 799 objects (89.7 GB) with no completion marker and no
+  manifest. It is an unfinished transfer. Do not read it as data.
+
+2026 Q2 tiles use **256 × 256 internal blocks** where every quarter from 2017
+to 2025 uses 1024 × 1024. Everything else matches: same COG layout, same
+DEFLATE with a horizontal predictor, same 10008 × 10008 size, same `int16` and
+`-32768` nodata, same five overview levels. Smaller blocks mean a windowed read
+fetches more and smaller byte ranges for the same pixels, so code tuned against
+the 2017–2025 tiles will behave differently here without failing.
+
+Until 2026 Q2 is folded in, treat the record as 2017 Q1 through 2025 Q4. A glob
+over `manifest/manifest_*.parquet` now matches 37 files, not 36, so filter on
+`year <= 2025` when you mean the quarters this catalog describes.
 
 ## What else is in the bucket
 

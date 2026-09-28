@@ -40,6 +40,7 @@ SET http_retries = 5;
 SELECT year, quarter, sum(size_bytes) AS bytes_total
 FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0'
+  AND year <= 2025   -- 2026 Q2 landed after this catalog was written
 GROUP BY 1, 2
 ORDER BY 1, 2;
 ```
@@ -118,10 +119,14 @@ from a tile that exists and is mostly nodata, which does have a row, with a low
 `valid_fraction`. Both look like "no data" on a map and they mean different
 things.
 
-**Quarter counts stop at 36.** The record is 2017 Q1 through 2025 Q4. A tile
-present in every quarter has 36 rows. 2026 is excluded from this catalog, so
-nothing here will ever show a 2026 quarter, and a tile's absence from 2026 says
-nothing about the upstream product.
+**Quarter counts stop at 36, but the bucket has 37.** The record this catalog
+describes is 2017 Q1 through 2025 Q4, so a tile present in every quarter has 36
+rows. `2026/Q2/` finished transferring on 2026-09-28 and has its own completion
+marker and manifest, but it is not in this catalog: its tiles use 256 × 256
+internal blocks rather than 1024 × 1024, and that has to be described before the
+quarter is folded in. A glob over `manifest/manifest_*.parquet` therefore
+matches 37 files; filter on `year <= 2025` to match this catalog. A tile's
+absence from 2026 here says nothing about the upstream product.
 
 **The geometry is the mosaic grid, not the MGRS grid.** Mosaic tiles align to
 MGRS cells but subdivide some of them. Do not substitute a generic MGRS grid

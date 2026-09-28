@@ -154,6 +154,7 @@ SELECT year, quarter, item_id,
        size_bytes
 FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
+  AND year <= 2025   -- 2026 Q2 landed after this catalog was written
 ORDER BY year, quarter;
 ```
 
@@ -227,11 +228,25 @@ tests, 481.1 GB, named after real tile ids, for example
 A recursive listing or a `**` glob picks them up and a naive size total counts
 them as data. Exclude the prefix.
 
-**2026 is not part of this dataset.** `2026/Q1/` holds 799 objects and
-`2026/Q2/` holds 107,908 objects across 26,988 tiles, counted on 2026-09-28.
-Neither has a completion marker, neither has a manifest, and their tile
-structure has not been verified. The catalog does not describe them. Do not read
-them, and do not infer from `2026/Q2/`'s size that the quarter is usable.
+**A glob over the manifests now matches 37 files, not 36.** `2026/Q2/` finished
+transferring on 2026-09-28 at 14:44 UTC, after this catalog's collections were
+written, and it has a completion marker and a `manifest_2026_Q2.parquet`:
+115,572 objects across 28,893 tiles, 17.25 TB. This catalog still describes 36
+quarters, 2017 Q1 through 2025 Q4. So `manifest_*.parquet` silently returns a
+quarter the collections do not cover. **Filter on `year <= 2025`** when you mean
+the described record. Every glob recipe above does.
+
+**2026 Q2 tiles are built differently.** They use 256 × 256 internal blocks
+where 2017 through 2025 use 1024 × 1024, measured with `gdalinfo` on
+`2026/Q2/31UFU_0_0/B04.tif` on 2026-09-28. Everything else is identical: COG
+layout, DEFLATE with a horizontal predictor, 10008 × 10008, `int16`, nodata
+`-32768`, five overviews. Nothing breaks, but a windowed read costs more,
+smaller range requests for the same pixels. That difference is why the quarter
+is not folded in yet rather than any doubt about the bytes.
+
+**`2026/Q1/` is an unfinished transfer.** 799 objects, no completion marker, no
+manifest. Do not read it as data, and do not treat its absence from a manifest
+glob as evidence the quarter does not exist upstream.
 
 **A finished quarter is a snapshot, not a permanent record.** Upstream
 reprocesses old quarters, so a quarter copied here can drift from its CDSE
