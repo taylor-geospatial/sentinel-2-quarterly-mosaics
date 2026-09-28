@@ -246,11 +246,11 @@
     {
       "name": "quarter",
       "type": "string",
-      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The `_subtile` tiebreak is what makes the order deterministic: `datetime` is constant inside a quarter file, and some MGRS cells carry more than one mosaic tile, so `_tile` and `datetime` alone leave those rows unordered. The dot rather than a hyphen keeps the value sorting in calendar order as a string. No partition file is published yet; each quarter gains its `item` link and its file as the backfill reaches it."
+      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The `_subtile` tiebreak is what makes the order deterministic: `datetime` is constant inside a quarter file, and some MGRS cells carry more than one mosaic tile, so `_tile` and `datetime` alone leave those rows unordered. The dot rather than a hyphen keeps the value sorting in calendar order as a string. `partition:glob` names the Source Cooperative data proxy, where the bucket is the account and the product slug is the key prefix, so a client reaches it anonymously with the endpoint set to `https://data.source.coop` and path-style addressing; the agent guide gives the DuckDB settings. No partition file is published yet; each quarter gains its `item` link and its file as the backfill reaches it."
     }
   ],
   "partition:file_count": 0,
-  "partition:glob": "s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/mosaics/quarter=*/items.parquet",
+  "partition:glob": "s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/mosaics/quarter=*/items.parquet",
   "table:primary_geometry": "geometry",
   "table:row_count": 0,
   "table:columns": [

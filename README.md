@@ -36,9 +36,14 @@ The catalog publishes into the existing product root, beside the imagery it
 describes:
 
 ```
-s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/     (via https://data.source.coop)
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
 ```
+
+Source Cooperative is a data proxy rather than plain S3, so the bucket is the
+account name and the product slug is the key prefix. `catalog.publish.yaml`
+carries `endpoint_url: https://data.source.coop`, and the credentials the
+`source-coop` CLI issues are STS tokens valid against that endpoint alone.
 
 The `{year}/{Qn}/{tile}/` imagery directories, `manifest/`, `_status/` and
 `_benchmarks/` were written by the transfer job and are not touched by this

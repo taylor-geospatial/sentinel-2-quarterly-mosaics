@@ -56,12 +56,12 @@ Each is a single 2.8 MB Parquet row group, so every query reads the whole file
 and no predicate prunes anything. Budget accordingly.
 
 **Every quarter a tile appears in, with its URL.** Run on 2026-09-28; returns
-36 rows for this tile, 2017 Q1 through 2025 Q4, in about 7 minutes on a domestic
-connection.
+36 rows for this tile, 2017 Q1 through 2025 Q4. Expect several minutes: the
+glob pulls all 36 manifests, about 100 MB, and none of them can be pruned.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-west-2';
+SET s3_endpoint = 'data.source.coop';
 SET s3_url_style = 'path';
 SET http_timeout = 600000;
 SET http_retries = 5;
@@ -69,7 +69,7 @@ SET http_retries = 5;
 SELECT year, quarter, item_id,
        'https://data.source.coop/' || destination_bucket || '/' || destination_key AS url,
        size_bytes
-FROM read_parquet('s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
+FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
 ORDER BY year, quarter;
 ```

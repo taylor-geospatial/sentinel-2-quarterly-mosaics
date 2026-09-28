@@ -27,18 +27,18 @@ exist.
 
 **Which quarters cover this tile.** The answer the coverage table will make
 cheap. Today it costs a read of all 36 manifests, about 100 MB and roughly
-7 minutes on a domestic connection. Run on 2026-09-28; returns 36 rows for this
-tile.
+several minutes on a domestic connection. Run on 2026-09-28; returns 36 rows for
+this tile.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-west-2';
+SET s3_endpoint = 'data.source.coop';
 SET s3_url_style = 'path';
 SET http_timeout = 600000;
 SET http_retries = 5;
 
 SELECT year, quarter, sum(size_bytes) AS bytes_total
-FROM read_parquet('s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
+FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0'
 GROUP BY 1, 2
 ORDER BY 1, 2;
@@ -69,9 +69,12 @@ measurement.
 `_status/{year}/{Qn}/complete.json`, which records the object count
 independently. For 2024 Q2 both give 28,272 tiles and 113,088 objects.
 
+Needs the same `s3_endpoint` and `s3_url_style` settings as the first query
+above; an `s3://` read fails without them.
+
 ```sql
 SELECT year, quarter, count(DISTINCT item_id) AS tiles
-FROM read_parquet('s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q[12].parquet')
+FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q[12].parquet')
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 

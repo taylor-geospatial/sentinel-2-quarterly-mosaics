@@ -99,15 +99,22 @@ So the red band of tile `31UFU_0_0` for 2024 Q2 is:
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/2024/Q2/31UFU_0_0/B04.tif
 ```
 
-The same objects are readable over S3 without credentials. The bucket is
-`us-west-2.opendata.source.coop` and the account is a prefix inside it:
+The same objects are readable over S3 without credentials. Source Cooperative is
+a data proxy, so the bucket is the account name and the product slug is the key
+prefix:
 
 ```
-s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/
 ```
 
-> An earlier version of this page gave the S3 path as `s3://tge-labs/...`.
-> That form does not resolve. Use the one above.
+Point your client at the proxy endpoint `https://data.source.coop` and use
+path-style addressing. In DuckDB that is `SET s3_endpoint = 'data.source.coop';`
+and `SET s3_url_style = 'path';`, with no credentials and no region.
+
+> Source Cooperative used a different S3 form before its 0.3 release:
+> `s3://us-west-2.opendata.source.coop/tge-labs/...`, with the account as a
+> prefix inside a region-named bucket. That form still resolves today, but it is
+> the old addressing. Prefer the one above.
 
 Read a window out of one tile without downloading it:
 

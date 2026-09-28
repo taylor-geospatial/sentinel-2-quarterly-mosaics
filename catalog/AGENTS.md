@@ -64,21 +64,29 @@ Verified on 2026-09-28, `HTTP/2 200` with `accept-ranges: bytes` and
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/2024/Q2/31UFU_0_0/B04.tif
 ```
 
-## Two settings, or your queries fail
+## Three settings, or your queries fail
 
-Both of these were hit and fixed while writing this file. Neither is optional.
+All three were hit and fixed while writing this file. None is optional.
 
-**1. `SET s3_url_style = 'path'` for every `s3://` read.** The Source
-Cooperative bucket is named `us-west-2.opendata.source.coop`. The dots in that
-name break virtual-host-style addressing, because the wildcard certificate does
-not cover a name with that many labels. Without the setting you get:
+**1. `SET s3_endpoint = 'data.source.coop'`.** Source Cooperative is a data
+proxy, not a plain S3 bucket. The bucket is the account name, `tge-labs`, and
+the product slug is the key prefix, so an `s3://` read has to be pointed at the
+proxy host. No credentials are needed: the data is public and anonymous reads
+work.
+
+**2. `SET s3_url_style = 'path'` for every `s3://` read.** The proxy does not
+serve virtual-host-style subdomains, so without this DuckDB invents a hostname
+that does not exist:
 
 ```
-IO Error: SSL peer certificate or SSH remote key was not OK error for HTTP GET to
-'https://us-west-2.opendata.source.coop.s3.us-west-2.amazonaws.com/?...'
+IO Error: Could not resolve hostname error for HTTP HEAD to
+'https://tge-labs.data.source.coop/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q2.parquet'
 ```
 
-**2. Raise `http_timeout`.** Each manifest is a single Parquet row group of
+`SET s3_region` is **not** needed against the proxy. Measured on 2026-09-28: the
+same query succeeds with the region unset and fails with the URL style unset.
+
+**3. Raise `http_timeout`.** Each manifest is a single Parquet row group of
 about 2.8 MB, so any query reads the whole file; there is no column or row-group
 pruning to fall back on. On a slow link the default timeout aborts mid-read and
 DuckDB reports it as corruption rather than as a timeout:
@@ -118,13 +126,13 @@ Returns `113088 | 28272 | 16.65`, which matches that quarter's
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-west-2';
+SET s3_endpoint = 'data.source.coop';
 SET s3_url_style = 'path';   -- required, see above
 SET http_timeout = 600000;
 SET http_retries = 5;
 
 SELECT year, quarter, count(DISTINCT item_id) AS tiles
-FROM read_parquet('s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q[12].parquet')
+FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q[12].parquet')
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 
@@ -136,7 +144,7 @@ the catalog exists to make cheap.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-west-2';
+SET s3_endpoint = 'data.source.coop';
 SET s3_url_style = 'path';
 SET http_timeout = 600000;
 SET http_retries = 5;
@@ -144,13 +152,13 @@ SET http_retries = 5;
 SELECT year, quarter, item_id,
        'https://data.source.coop/' || destination_bucket || '/' || destination_key AS url,
        size_bytes
-FROM read_parquet('s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
+FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_*.parquet')
 WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
 ORDER BY year, quarter;
 ```
 
 Returns 36 rows, one per quarter, 2017 Q1 through 2025 Q4. It took about
-7 minutes on a domestic connection, because the glob pulls all 36 manifests
+several minutes on a domestic connection, because the glob pulls all 36 manifests
 (roughly 100 MB) and none of them can be pruned. Cache the result rather than
 running it twice. Once `coverage/tiles.parquet` publishes, that collection
 answers the same question from one range read.
