@@ -1,0 +1,218 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+  ],
+  "id": "coverage",
+  "title": "Tile footprints and per-quarter coverage",
+  "description": "What exists where, for the `mosaics` collection: one row per mosaic tile per quarter, and one polygon per mosaic tile. This is the cheap first stop. A client that wants to know which quarters cover a place, or how much of a tile carries real pixels, reads this instead of listing a million-object prefix or opening 36 rasters.\n\n`tiles.parquet` holds the per-tile, per-quarter table, sorted by tile and then quarter so one tile's whole 36-quarter history is a contiguous run and a single range read answers \"what do I have here, over time\". Its size columns come from the transfer manifests, which record the byte size of every object that landed. `valid_fraction` is the one column that needs the rasters: it is measured from the smallest internal overview of the red band, 313 x 313 pixels, by counting pixels that are not the `-32768` nodata value. That is a 0.1 megapixel read per tile rather than a 100 megapixel one, and it is what makes the measure affordable over a million tiles.\n\n`footprints.pmtiles` carries one polygon per mosaic tile, in the true mosaic grid rather than a bounding envelope, with the count of quarters present on each. It is a fixed geometry: a client joins the table onto it by `subtile` and the tileset does not change when the statistics are recomputed.\n\n**Nothing here is published yet.** `table:row_count` is 0 and both data assets are declared without `file:size` or `file:checksum`, because the bytes do not exist. The schema below is the contract the generator writes to, not a description of a file you can read today. Until it lands, the per-quarter transfer manifests at `manifest/manifest_{year}_{Qn}.parquet` answer the size and presence questions, and the agent guide shows how.\n\nDerived from the Copernicus Sentinel-2 Global Mosaics. Contains modified Copernicus Sentinel data.",
+  "license": "other",
+  "keywords": [
+    "sentinel-2",
+    "copernicus",
+    "coverage",
+    "mgrs",
+    "tile-grid",
+    "footprints",
+    "pmtiles",
+    "statistics"
+  ],
+  "updated": "2026-09-28T10:31:47Z",
+  "providers": [
+    {
+      "name": "European Space Agency (ESA)",
+      "description": "Operates the Sentinel-2 mission and produces the Global Mosaics these statistics are measured from.",
+      "roles": [
+        "producer"
+      ],
+      "url": "https://sentinels.copernicus.eu/web/sentinel/copernicus/sentinel-2"
+    },
+    {
+      "name": "European Commission",
+      "description": "Owns the Copernicus programme and sets the terms the Sentinel data is licensed under.",
+      "roles": [
+        "licensor"
+      ],
+      "url": "https://commission.europa.eu/"
+    },
+    {
+      "name": "Taylor Geospatial Engine",
+      "description": "Aggregates the mirrored mosaic tiles into per-quarter coverage statistics and a tile-footprint PMTiles, and hosts both.",
+      "roles": [
+        "processor",
+        "host"
+      ],
+      "url": "https://tgengine.org"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          -180,
+          -90,
+          180,
+          90
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2017-01-01T00:00:00Z",
+          "2025-12-31T23:59:59Z"
+        ]
+      ]
+    }
+  },
+  "table:primary_geometry": "geometry",
+  "table:row_count": 0,
+  "table:columns": [
+    {
+      "name": "subtile",
+      "type": "string",
+      "description": "The mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. Join key against the `footprints.pmtiles` feature id and against `_subtile` in the mosaics item index. With `quarter`, it is the unique key of this table."
+    },
+    {
+      "name": "mgrs_tile",
+      "type": "string",
+      "description": "The bare MGRS grid cell, for example `31UFU`. Not unique: one cell can carry more than one mosaic tile."
+    },
+    {
+      "name": "year",
+      "type": "int16",
+      "description": "Calendar year of the quarter, 2017 to 2025."
+    },
+    {
+      "name": "quarter_num",
+      "type": "int8",
+      "description": "Quarter of the year, 1 to 4."
+    },
+    {
+      "name": "quarter",
+      "type": "string",
+      "description": "The quarter as `YYYY.Qn`, for example `2024.Q2`. The same value the mosaics collection partitions on."
+    },
+    {
+      "name": "bytes_total",
+      "type": "int64",
+      "description": "Sum of the four band files for this tile and quarter, in bytes, from the transfer manifest. A useful proxy for how much real signal a tile holds: an almost empty tile compresses far smaller than a full one."
+    },
+    {
+      "name": "bytes_b02",
+      "type": "int64",
+      "description": "Size of the blue COG in bytes, from the transfer manifest."
+    },
+    {
+      "name": "bytes_b03",
+      "type": "int64",
+      "description": "Size of the green COG in bytes, from the transfer manifest."
+    },
+    {
+      "name": "bytes_b04",
+      "type": "int64",
+      "description": "Size of the red COG in bytes, from the transfer manifest."
+    },
+    {
+      "name": "bytes_b08",
+      "type": "int64",
+      "description": "Size of the near-infrared COG in bytes, from the transfer manifest."
+    },
+    {
+      "name": "valid_fraction",
+      "type": "float",
+      "description": "Fraction of the tile that carries a real value rather than nodata, from 0.0 to 1.0. Measured on the smallest internal overview of the red band, 313 x 313 pixels, by counting pixels not equal to -32768. It is an estimate at that resolution, not an exact pixel count of the full raster. NULL where the overview has not been read yet."
+    },
+    {
+      "name": "geometry",
+      "type": "geometry",
+      "description": "The mosaic tile footprint in EPSG:4326, as a Polygon or, for tiles crossing the antimeridian, a MultiPolygon split at 180 degrees. The same geometry the PMTiles carries. Last column in the file, and the table's primary geometry."
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "./tiles.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Per-tile, per-quarter coverage table",
+      "roles": [
+        "data"
+      ],
+      "description": "One row per mosaic tile per quarter, sorted by subtile then quarter so one tile's 36-quarter history is a contiguous run. Not published yet; see the collection description."
+    },
+    "pmtiles": {
+      "href": "./footprints.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Mosaic tile footprints",
+      "roles": [
+        "visual"
+      ],
+      "description": "One polygon per mosaic tile, on the true mosaic grid, carrying the count of quarters present. Join the coverage table onto it by `subtile`. Not published yet; see the collection description.",
+      "pmtiles:layers": [
+        "footprints"
+      ]
+    },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Default MapLibre style",
+      "roles": [
+        "style",
+        "default"
+      ],
+      "file:size": 1146,
+      "file:checksum": "122088c45aea0b9c1f171883f4b65775291de81e1ac6180c7b9367202d84c1d499ec",
+      "description": "Paints each mosaic tile by `quarters_present` in six steps, so the map reads as how much of the 36-quarter record covers a place rather than as a flat footprint."
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Sentinel-2 Quarterly Cloudless Mosaics"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "Sentinel-2 Quarterly Cloudless Mosaics"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Collection README"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Collection agent guide"
+    },
+    {
+      "rel": "license",
+      "href": "https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice",
+      "type": "application/pdf",
+      "title": "Legal notice on the use of Copernicus Sentinel Data and Service Information"
+    },
+    {
+      "rel": "via",
+      "href": "https://dataspace.copernicus.eu",
+      "type": "text/html",
+      "title": "Copernicus Data Space Ecosystem, the source of the mosaics these statistics measure"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "./footprints.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Mosaic tile footprints",
+      "pmtiles:layers": [
+        "footprints"
+      ]
+    }
+  ]
+}

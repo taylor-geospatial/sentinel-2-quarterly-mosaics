@@ -14,14 +14,16 @@ widened allow-list is a false claim about what this catalog conforms to.
 
 ## The rashid version floor
 
-The gate needs rashid `>=0.1.5,<0.2.0`. It reads `rashid --version` and fails
+The gate needs rashid `>=0.1.8,<0.2.0`. It reads `rashid --version` and fails
 outside that range. It also fails when rashid is absent, and prints the install
 command. A skip would report a green run for a catalog that no validator read.
 
-The floor is 0.1.5 because rules PTL-LNK-007, PTL-LNK-008, PTL-LNK-009 and
-PTL-AST-006 do not exist below it. The gate asserts all four. An older rashid
-reports a pass for a catalog that it never checked against them. The same range
-is in `portolan-cli/pyproject.toml` and in the CI install step.
+The floor is 0.1.8 because that is the first rashid that accepts the absolute
+root `self` link Portolan schema v0.2.0 recommends (PORTO-CORE-081). This
+catalog carries that link, so an older rashid fails a root that is correct.
+Rules PTL-LNK-007, PTL-LNK-008, PTL-LNK-009 and PTL-AST-006 arrived in 0.1.5
+and the gate asserts all four; an older rashid reports a pass for a catalog it
+never checked against them. The same range is in the CI install step.
 
 The upper bound stops an unreviewed 0.2 rule set from changing what this gate
 means. Raise both bounds together when you move to 0.2, and read the new rules
@@ -34,7 +36,31 @@ something.
 
 ## Accepted deviations
 
-None.
+None. `ACCEPTED` in `tests/test_conformance.py` is still empty, and the section
+below is deliberately not an acceptance.
+
+## Open gaps, not accepted
+
+Two gates fail today. Both have the same cause: the `coverage` collection
+declares the structure of data that the backfill has not produced yet. Neither
+is in `ACCEPTED`, because widening the allow-list would turn "this catalog is
+half-built" into "this catalog conforms", and nothing downstream could tell the
+difference.
+
+| Gate | Finding | Cause | Closes in |
+|---|---|---|---|
+| `test_links.py` | `coverage/collection.json: rel:pmtiles -> ./footprints.pmtiles does not exist` | The footprints tileset is not built yet. The link is required by PTL-VIZ-003 once the asset is declared, and the link gate has no data-suffix exemption for links, only for assets. | Phase 4, when `footprints.pmtiles` is generated and uploaded |
+| `test_conformance.py` | `PTL-VIZ-001 coverage/collection.json: geospatial collection has no asset with the 'thumbnail' role` | A thumbnail for this collection has to be rendered from its own coverage statistics, which do not exist yet. Rendering something else would misrepresent what the collection shows. | Phase 4, with the styles and thumbnail pass |
+
+`mosaics` passes both gates. Its thumbnail is rendered from published COGs, and
+it declares no visualization derivative it cannot back.
+
+The alternative was to hold the `coverage` collection out of `catalog/` until
+its bytes exist, which would make CI green today at the cost of publishing no
+contract for the table. Declaring the contract early is worth more than a green
+check on a catalog that is openly mid-build, so long as the failures stay
+visible. When Phase 4 lands, both rows here are deleted, not moved into
+`ACCEPTED`.
 
 <!--
 When you accept one, add a row and a section explaining it, like this:

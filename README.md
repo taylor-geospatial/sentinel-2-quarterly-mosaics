@@ -47,9 +47,15 @@ repository. `tools/publish.py` never deletes, so it cannot disturb them.
 ## Publish
 
 ```bash
-python3 tools/publish.py            # dry run: what would change
-python3 tools/publish.py --confirm  # upload; needs AWS credentials
+python3 tools/publish.py --force            # dry run: what would upload
+python3 tools/publish.py --force --confirm  # upload; needs AWS credentials
 ```
+
+`--force` is not optional here. Without it, `publish.py` paginates
+`list_objects_v2` over the whole write prefix to work out what changed, and this
+prefix holds over four million objects, so the command appears to hang. `--force`
+skips the listing and re-uploads all 11 catalog files, which at this size is far
+cheaper than the listing it avoids.
 
 It never deletes. Removing a file from `catalog/` does not unpublish it, so
 delete the object yourself if that is what you meant.

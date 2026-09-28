@@ -39,6 +39,20 @@ the transfer job: `{year}/{Qn}/{tile}/` imagery, `manifest/`, `_status/` and
 `_benchmarks/`. `tools/publish.py` never deletes, which is what makes that safe.
 Do not add a delete pass to it.
 
+**Use `--force` for the dry run here.** `tools/publish.py` builds its change
+index by paginating `list_objects_v2` over the whole write prefix. For a normal
+catalog that is a few hundred keys. For this one it is over four million, and
+the dry run appears to hang. `--force` skips the remote listing and reports what
+would upload:
+
+```bash
+python3 tools/publish.py --force            # dry run, no listing
+python3 tools/publish.py --force --confirm  # upload; needs AWS credentials
+```
+
+The cost of `--force` is that it re-uploads all 11 catalog files instead of only
+the changed ones. At this size that is cheaper than the listing it avoids.
+
 ## Data never enters git
 
 Never commit a GeoParquet, COG, PMTiles, Zarr, or COPC file. If a gate needs

@@ -1,0 +1,51 @@
+{
+  "version": 8,
+  "name": "Mosaic tile coverage",
+  "sources": {
+    "footprints": {
+      "type": "vector",
+      "url": "pmtiles://https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/coverage/footprints.pmtiles",
+      "attribution": "Copernicus Sentinel data 2017-2025"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#12161c"
+      }
+    },
+    {
+      "id": "footprints-fill",
+      "type": "fill",
+      "source": "footprints",
+      "source-layer": "footprints",
+      "paint": {
+        "fill-color": [
+          "step",
+          ["get", "quarters_present"],
+          "#2b1a33",
+          1, "#4a1f4f",
+          9, "#7a2f62",
+          18, "#b04a5e",
+          27, "#e07a4a",
+          36, "#f2d64b"
+        ],
+        "fill-opacity": 0.85
+      }
+    },
+    {
+      "id": "footprints-outline",
+      "type": "line",
+      "source": "footprints",
+      "source-layer": "footprints",
+      "minzoom": 4,
+      "paint": {
+        "line-color": "#f2d64b",
+        "line-opacity": 0.25,
+        "line-width": 0.4
+      }
+    }
+  ]
+}
