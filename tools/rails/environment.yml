@@ -1,0 +1,48 @@
+# micromamba env for the rails lane.
+#
+#     micromamba create -y -f tools/rails/environment.yml \
+#         -p /u/cholmes/micromamba/envs/s2mosaics
+#
+# What each piece is for:
+#
+# * duckdb     staging the item rows and the coverage table
+# * pyproj     UTM -> WGS84 for every tile footprint (tools/mgrs_grid.py)
+# * shapely    the antimeridian split, and the --bbox tile filter
+# * libgdal-core + gdal  the overview COGs. **The WebP driver is not
+#   optional**: the published browse layer is WebP, and make_overview.py
+#   falls back to JPEG with a warning when it is missing, which would
+#   silently publish the wrong thing. `gdalinfo --formats | grep WEBP`
+#   after creating the env.
+# * rasterio   the geometry verification gate (make_items.py --verify)
+#   and valid_fraction (make_coverage.py), both of which read COG
+#   headers and small overviews over https
+# * tippecanoe + pmtiles  the footprints tileset
+# * boto3      the uploads
+#
+# geoparquet-io is pinned. Both `--compression-level` and
+# `--row-group-size` only reach gpio's write engine from 1.4.0 onward; on
+# 1.3.0 they were accepted and dropped. An unpinned install is how a flag
+# that "did nothing" quietly starts doing something very expensive.
+# Install it last, on its own: its dependency tree pulls an older
+# botocore than boto3 asks for, and letting pip resolve them together
+# fails outright.
+name: s2mosaics
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - duckdb>=1.4
+  - pyarrow>=21
+  - pyproj>=3.6
+  - shapely>=2.0
+  - gdal>=3.8
+  - libgdal-core
+  - rasterio>=1.3
+  - numpy
+  - boto3
+  - pytz
+  - tippecanoe
+  - pip
+  - pip:
+      - geoparquet-io==1.5.0
+      - pmtiles

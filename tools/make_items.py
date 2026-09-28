@@ -215,9 +215,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--year", type=int, required=True)
     ap.add_argument("--quarter", required=True, choices=sorted(schema.QUARTER_MONTHS))
-    ap.add_argument("--out", required=True,
+    ap.add_argument("--out",
                     help="work directory; the staging file lands under "
-                         "quarter=YYYY.Qn/ inside it")
+                         "quarter=YYYY.Qn/ inside it. Not needed with "
+                         "--verify-only.")
     ap.add_argument("--items-dir",
                     help="also write item JSON at {year}/{Qn}/{tile}/{id}.json")
     ap.add_argument("--manifest",
@@ -226,8 +227,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tiles", help="comma-separated tile ids to keep")
     ap.add_argument("--verify", type=int, default=0, metavar="N",
                     help="check N sampled tiles against their COG headers")
+    ap.add_argument("--verify-only", action="store_true",
+                    help="run the --verify gate and write nothing. The gate "
+                         "runs after the items are already staged, and "
+                         "rewriting a 130 MB staging file to re-read a "
+                         "manifest is pure waste.")
     a = ap.parse_args(argv)
 
+    if not a.out and not a.verify_only:
+        ap.error("--out is required unless --verify-only is given")
     config = load_config()
     public_base = config["public_base"].rstrip("/")
     root_href = f"{public_base}/catalog.json"
@@ -241,6 +249,17 @@ def main(argv: list[str] | None = None) -> int:
         f"{time.monotonic() - t0:,.1f}s")
     if not manifest:
         sys.exit(f"{a.year} {a.quarter}: the manifest matched no items")
+
+    if a.verify_only:
+        if not a.verify:
+            sys.exit("--verify-only needs --verify N")
+        sample = [schema.split_id(i)[2] for i, _ in manifest]
+        import random
+        random.seed(0)
+        sample = random.sample(sample, min(a.verify, len(sample)))
+        if verify(sample, public_base, a.year, a.quarter):
+            sys.exit("geometry verification failed; not publishing this quarter")
+        return 0
 
     out_dir = Path(a.out) / f"quarter={a.year}.{a.quarter}"
     out_dir.mkdir(parents=True, exist_ok=True)
