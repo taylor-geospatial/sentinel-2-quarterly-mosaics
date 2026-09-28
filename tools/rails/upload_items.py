@@ -89,25 +89,52 @@ def _client(session, endpoint: str | None):
     if existing is not None:
         return existing
     with _new_client:
-        _local.client = session.client("s3", endpoint_url=endpoint or None)
+        from botocore.config import Config
+        # Adaptive retries with client-side rate limiting. Measured
+        # against the proxy from a laptop: after a burst of about forty
+        # requests, every call from this process was answered
+        # `AccessDenied` for roughly ten minutes while the same
+        # credentials kept working from the aws CLI. Whatever that is, a
+        # run of 28,272 objects will meet it, and the default of three
+        # legacy attempts will not ride it out.
+        _local.client = session.client(
+            "s3", endpoint_url=endpoint or None,
+            config=Config(retries={"mode": "adaptive", "max_attempts": 10}))
     return _local.client
 
 
-def put_one(job) -> str:
+def put_one(job) -> tuple[str, str, str]:
+    """(outcome, key, detail). Never raises.
+
+    One object out of a million failing must not cancel the other
+    999,999: `ThreadPoolExecutor.map` propagates the first exception and
+    abandons the rest, which on a run this size would throw away an hour
+    of successful uploads over one bad response. Every failure is
+    returned, counted, and named at the end, and the exit status is
+    non-zero when there was any.
+    """
+    path, key, session, bucket, skip_existing, endpoint = job
+    try:
+        return _put_one(job)
+    except Exception as exc:                          # noqa: BLE001
+        return "failed", key, f"{type(exc).__name__}: {exc}"
+
+
+def _put_one(job) -> tuple[str, str, str]:
     path, key, session, bucket, skip_existing, endpoint = job
     client = _client(session, endpoint)
     if skip_existing:
         try:
             if int(client.head_object(Bucket=bucket, Key=key)["ContentLength"]
                    ) == path.stat().st_size:
-                return "skipped"
+                return "skipped", key, ""
         except client.exceptions.ClientError as exc:
             if exc.response.get("Error", {}).get("Code", "") not in (
                     "404", "NoSuchKey", "NotFound"):
                 raise
     client.upload_file(str(path), bucket, key,
                        ExtraArgs={"ContentType": CONTENT_TYPE})
-    return "uploaded"
+    return "uploaded", key, ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -151,21 +178,34 @@ def main(argv: list[str] | None = None) -> int:
     # race to run `source-coop creds` at the same moment.
     session.get_credentials().get_frozen_credentials()
     t0 = time.monotonic()
-    done = {"uploaded": 0, "skipped": 0}
+    done = {"uploaded": 0, "skipped": 0, "failed": 0}
+    failures: list[tuple[str, str]] = []
     endpoint = a.endpoint or config.get("endpoint_url")
     work = [(p, k, session, bucket, a.skip_existing, endpoint)
             for p, k in jobs]
     with cf.ThreadPoolExecutor(a.workers) as pool:
-        for n, outcome in enumerate(pool.map(put_one, work), start=1):
+        for n, (outcome, key, detail) in enumerate(pool.map(put_one, work),
+                                                   start=1):
             done[outcome] += 1
+            if outcome == "failed":
+                failures.append((key, detail))
             if n % PROGRESS_EVERY == 0:
                 rate = n / (time.monotonic() - t0)
                 say(f"  {n:,}/{len(jobs):,} ({rate:,.0f}/s, "
                     f"{(len(jobs) - n) / rate / 60:,.1f} min left)")
     secs = time.monotonic() - t0
     say(f"{a.year} {a.quarter}: {done['uploaded']:,} uploaded, "
-        f"{done['skipped']:,} skipped, {secs / 60:,.1f} min "
-        f"({len(jobs) / secs:,.0f} objects/s)")
+        f"{done['skipped']:,} skipped, {done['failed']:,} failed, "
+        f"{secs / 60:,.1f} min ({len(jobs) / secs:,.0f} objects/s)")
+    if failures:
+        print(f"\n{len(failures)} object(s) failed:", file=sys.stderr)
+        for key, detail in failures[:20]:
+            print(f"  {key}: {detail}", file=sys.stderr)
+        if len(failures) > 20:
+            print(f"  ... and {len(failures) - 20} more", file=sys.stderr)
+        print("Rerun with --skip-existing to retry only what is missing.",
+              file=sys.stderr)
+        return 1
     return 0
 
 

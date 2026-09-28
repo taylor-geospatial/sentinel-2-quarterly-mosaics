@@ -106,6 +106,36 @@ it is worth running rather than assuming — on the maintainer's laptop a
 Nothing but the upload steps needs an identity at all; every read in this
 pipeline is anonymous https.
 
+### What the proxy allows, and one thing to watch
+
+Measured against the live bucket from a laptop: `put_object`,
+`head_object`, `get_object` and `delete_object` all work on the product
+prefix, and objects appear immediately at their public
+`https://data.source.coop/tge-labs/...` URL, byte-identical, with the
+content type the uploader set. The bucket is versioned — responses carry
+`x-amz-version-id` — so a delete leaves a marker and a re-uploaded
+quarter keeps its predecessor as an old version.
+
+`list_objects_v2` is **denied**. `tools/publish.py` already survives
+that: it treats an unlistable prefix as "everything changed", prints a
+note and re-uploads the whole of `catalog/`, which is a few dozen small
+files. But it means there is no cheap way to ask the bucket what is
+published, so the resume mechanism for the big lanes is a HEAD per
+object (`upload_items.py --skip-existing`), not a listing.
+
+Twice during testing, a burst of roughly forty requests was followed by
+about ten minutes in which **every** boto3 call from that process was
+answered `AccessDenied` — reads of objects that are unquestionably
+public, writes, and deletes alike — while the same credentials kept
+working from the `aws` CLI at the same moment. The credentials had not
+expired, the signatures matched, and the error came from the proxy
+(`application/xml`, an S3-shaped body) rather than from Cloudflare. It
+cleared on its own. Whatever it is, a run of 28,272 objects will meet it,
+so `upload_items.py` uses adaptive retries, never lets one object cancel
+the other 999,999, and reports what failed so a `--skip-existing` rerun
+can pick it up. **Measure this properly on the first real rails run**;
+this is the one number in this file that a laptop cannot establish.
+
 ### Reading the public endpoint from Python
 
 `data.source.coop` sits behind Cloudflare, which rejects the default
