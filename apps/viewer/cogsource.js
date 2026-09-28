@@ -48,12 +48,21 @@ class NoStoreClient extends BaseClient {
 // reads exactly the bytes its parser asks for unless given a block size, which
 // turns the five IFDs sitting in the first few kilobytes into a dozen tiny
 // sequential round-trips. Asking for 64 KiB blocks collapses those into one or
-// two, and the same block cache then merges a window's contiguous reads.
+// two, and consecutive blocks are then merged into a single range request by
+// the blocked source's own grouping, so reading a whole COG block is one GET.
+//
+// `cacheSize` is in 64 KiB blocks and has to be generous, because it is not
+// only a cache: the blocked source clears its evicted-block map at the start of
+// every fetch and throws `AggregateError: Request failed` for any block that
+// was evicted while a read still needed it. One 1024-pixel Int16 COG block runs
+// about 1.4 MB, so a three-band tile alone touches ~66 blocks — under the
+// library's default of 100 that is one eviction away from failing. 512 blocks
+// is 32 MB, which holds a viewport's worth of three bands with room to spare.
 export function openCogHeaders(href, options = {}) {
   return fromCustomClient(new NoStoreClient(href), {
     allowFullFile: false,
     blockSize: 65536,
-    cacheSize: 64,
+    cacheSize: 512,
     ...options,
   });
 }
