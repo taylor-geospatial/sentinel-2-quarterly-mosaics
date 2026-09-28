@@ -208,23 +208,56 @@ tmpfs, too small for an overview's scratch.
 
 ## Measured costs
 
-From a full local build of 2024 Q2 (28,272 items) and a six-tile overview:
+2024 Q2, all 28,272 items, on one `cpu` node (rails01, 32 cores, 120 GB):
 
-| Step | Cost |
-| --- | --- |
-| manifest download | 2.8 MB, ~11 s |
-| `make_items` | 6.1 s, 129.7 MB of NDJSON, 28,272 item JSONs |
-| `build_quarter` | 15.5 s, 5.3 MB of parquet, `gpio check all` clean |
-| `make_coverage` (no valid_fraction) | ~75 s, 3.4 MB |
-| `make_footprints` | 13 s, 10.2 MB of PMTiles |
-| `make_overview` | dominated by reads: about 550 kB per tile per band at zoom 10 |
+| Step | On rails | On a laptop | Note |
+| --- | --- | --- | --- |
+| manifest download | 2.7 s | 96 s | 2.8 MB |
+| `make_items` | 307 s | 6.1 s | see below — this is the filesystem, not the work |
+| geometry gate, 200 tiles | 7.5 s | 18.7 s for 40 | 0 mismatches |
+| `build_quarter` | 21.4 s | 16.2 s | 5.3 MB, 5 row groups, `gpio check all` clean |
+| `make_coverage` | — | ~75 s | 3.4 MB |
+| `make_footprints` | — | 13 s | 10.2 MB of PMTiles |
 
-The overview is the only step whose cost scales with the data rather than
-the item count. At zoom 10 it reads each tile's 16x internal overview,
-626 x 626 pixels, for three bands: roughly 1.7 MB a tile, so about 48 GB
-for a 28,272-tile quarter. That is the number to watch on the first real
-run; `ZOOM=9` quarters it.
+`build_quarter` produced a byte-for-byte match with the laptop build:
+28,272 rows, 28,204 MGRS cells, 5 row groups, 5.3 MB, geo metadata
+2.0.0.
 
-Item JSON upload is the other big one: 28,272 objects a quarter, a
-million across the backfill. At 32 workers that is minutes per quarter,
-and it is round trips rather than bytes.
+### `make_items` is slow on /u, and it does not have to be
+
+Writing 28,272 item JSONs to `/u` took 307 seconds against 6 seconds on
+a laptop SSD. `/u` is NFS over RDMA and the cost is metadata operations,
+not bytes. Measured inside an allocation, writing 2,000 small files:
+
+    node-local /tmp   0.054 s
+    /u                7.78 s
+
+That is 145x, and it scales: about five minutes a quarter, three hours
+across the backfill. The item JSON is only needed by the upload step of
+the same job, and 190 MB fits easily in the node's 64 GB tmpfs, so
+pointing `ITEMS` at node-local storage would take that back. It is not
+wired up yet — the pilot ran with the simple path — but it is the
+cheapest large win available.
+
+Note that `/tmp` really is a 64 GB tmpfs on a compute node, whatever
+`df` on the login node suggests, so the overview scratch stays on `/u`:
+it can run to tens of gigabytes, and keeping it on `/u` is also what
+lets a resubmitted job reuse the zones that already warped.
+
+### The overview is the long pole, and staging was the reason
+
+`gdalbuildvrt` opens every source to read its georeferencing, and inside
+one call those reads are serial. Zone 32601's 138 tiles took about 60
+seconds for one band; a global quarter is roughly 360 (zone, band)
+pairs, so staging alone came to about six hours before a single pixel
+was warped. The first pilot was cancelled there. Staging now runs on a
+pool of `4x --jobs` capped at 64, since it is HTTP latency rather than
+computation.
+
+At zoom 9 each tile is read at its 32x overview, 313 x 313 pixels per
+band. At zoom 10 it is the 16x overview, 626 x 626, which is four times
+the bytes: about 600 kB per band per tile, so roughly 51 GB of reads for
+a quarter against 13 GB at zoom 9.
+
+Item JSON upload is the other large step: 28,272 objects a quarter, a
+million across the backfill, bound by round trips rather than bytes.

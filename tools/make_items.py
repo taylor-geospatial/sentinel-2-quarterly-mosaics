@@ -172,10 +172,27 @@ def write_json(path: Path, payload: dict) -> None:
     os.replace(tmp, path)
 
 
+VERIFY_ATTEMPTS = 3
+
+
 def verify(tiles: list[str], public_base: str, year: int, quarter: str,
-           workers: int = 12) -> int:
-    """Open sampled COGs and check the computed georeferencing. Returns
-    the number of mismatches; the caller decides what to do about it."""
+           workers: int = 12, tolerate_unreadable: int = 0) -> int:
+    """Open sampled COGs and check the computed georeferencing.
+
+    Two failures live here and they are not the same thing, which is
+    worth the extra code: a tile whose file disagrees with the geometry
+    this repo computed is a correctness bug and must stop the quarter,
+    while a tile that would not open is usually the network. Measured on
+    rails: `50DNJ_0_0` came back "not recognized as being in a supported
+    file format" under twelve-way concurrency and then opened three times
+    out of three a minute later, HTTP 200 with the manifest's exact byte
+    count. Conflating the two meant one hiccup blocked a whole quarter.
+
+    So an open failure is retried, and only a tile that fails every
+    attempt is counted as unreadable. Returns the number of hard
+    failures: every mismatch, plus the unreadable tiles beyond
+    `tolerate_unreadable`.
+    """
     os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
     try:
         import rasterio
@@ -184,31 +201,42 @@ def verify(tiles: list[str], public_base: str, year: int, quarter: str,
 
     def one(tile: str):
         url = f"/vsicurl/{public_base}/{year}/{quarter}/{tile}/B04.tif"
-        try:
-            with rasterio.open(url) as ds:
-                return tile, None, (ds.crs.to_epsg(), list(ds.transform)[:6],
-                                    [ds.height, ds.width])
-        except Exception as exc:                      # noqa: BLE001
-            return tile, str(exc), None
+        last = ""
+        for attempt in range(1, VERIFY_ATTEMPTS + 1):
+            try:
+                with rasterio.open(url) as ds:
+                    return tile, None, (ds.crs.to_epsg(), list(ds.transform)[:6],
+                                        [ds.height, ds.width])
+            except Exception as exc:                  # noqa: BLE001
+                last = str(exc)
+                if attempt < VERIFY_ATTEMPTS:
+                    time.sleep(2 * attempt)
+        return tile, last, None
 
-    bad = 0
+    mismatched, unreadable = [], []
     t0 = time.monotonic()
     with cf.ThreadPoolExecutor(workers) as pool:
         for tile, err, got in pool.map(one, tiles):
             if err:
-                bad += 1
-                print(f"  {tile}: could not open: {err}", file=sys.stderr)
+                unreadable.append(tile)
+                print(f"  {tile}: unreadable after {VERIFY_ATTEMPTS} "
+                      f"attempts: {err}", file=sys.stderr)
                 continue
             epsg, _, _ = mgrs_grid.origin(tile)
             want = (epsg, mgrs_grid.transform_of(tile)[:6],
                     [mgrs_grid.TILE_PX, mgrs_grid.TILE_PX])
             if got != want:
-                bad += 1
-                print(f"  {tile}: file says {got}, we computed {want}",
-                      file=sys.stderr)
-    say(f"verify: {len(tiles)} tile(s), {bad} mismatch(es), "
+                mismatched.append(tile)
+                print(f"  {tile}: MISMATCH -- file says {got}, we computed "
+                      f"{want}", file=sys.stderr)
+    say(f"verify: {len(tiles)} tile(s), {len(mismatched)} geometry "
+        f"mismatch(es), {len(unreadable)} unreadable, "
         f"{time.monotonic() - t0:,.1f}s")
-    return bad
+    over = max(0, len(unreadable) - tolerate_unreadable)
+    if unreadable and not over:
+        say(f"verify: tolerating {len(unreadable)} unreadable tile(s); "
+            "they read as a network problem, not a geometry one")
+    return len(mismatched) + over
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -227,6 +255,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tiles", help="comma-separated tile ids to keep")
     ap.add_argument("--verify", type=int, default=0, metavar="N",
                     help="check N sampled tiles against their COG headers")
+    ap.add_argument("--tolerate-unreadable", type=int, default=2,
+                    metavar="N",
+                    help="how many sampled tiles may fail to open before "
+                         "the gate fails. A geometry mismatch always fails, "
+                         "however few (default 2)")
     ap.add_argument("--verify-only", action="store_true",
                     help="run the --verify gate and write nothing. The gate "
                          "runs after the items are already staged, and "
@@ -257,8 +290,9 @@ def main(argv: list[str] | None = None) -> int:
         import random
         random.seed(0)
         sample = random.sample(sample, min(a.verify, len(sample)))
-        if verify(sample, public_base, a.year, a.quarter):
-            sys.exit("geometry verification failed; not publishing this quarter")
+        if verify(sample, public_base, a.year, a.quarter,
+                  tolerate_unreadable=a.tolerate_unreadable):
+            sys.exit("verification failed; not publishing this quarter")
         return 0
 
     out_dir = Path(a.out) / f"quarter={a.year}.{a.quarter}"
@@ -292,8 +326,9 @@ def main(argv: list[str] | None = None) -> int:
         sample = [schema.split_id(i)[2] for i, _ in manifest]
         random.seed(0)
         sample = random.sample(sample, min(a.verify, len(sample)))
-        if verify(sample, public_base, a.year, a.quarter):
-            sys.exit("geometry verification failed; not publishing this quarter")
+        if verify(sample, public_base, a.year, a.quarter,
+                  tolerate_unreadable=a.tolerate_unreadable):
+            sys.exit("verification failed; not publishing this quarter")
     return 0
 
 
