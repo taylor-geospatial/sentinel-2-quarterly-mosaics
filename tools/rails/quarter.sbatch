@@ -89,9 +89,13 @@ UP=(
   "coverage/tiles.parquet"
   "coverage/footprints.pmtiles"
 )
-for f in "${UP[@]}"; do
-  [ -s "$PUBLISH/$f" ] || { echo "missing $PUBLISH/$f"; exit 1; }
-done
+# Under DRY_RUN nothing was built, so there is nothing to check; the
+# point of a dry run is to see the upload commands too.
+if [ "$DRY_RUN" != 1 ]; then
+  for f in "${UP[@]}"; do
+    [ -s "$PUBLISH/$f" ] || { echo "missing $PUBLISH/$f"; exit 1; }
+  done
+fi
 run python3 "$REPO/tools/rails/upload.py" --data-dir "$PUBLISH" \
   --key-prefix "$KEY_PREFIX" "${UP[@]}"
 run python3 "$REPO/tools/rails/upload_items.py" --items-dir "$ITEMS" \
