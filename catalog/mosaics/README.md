@@ -106,8 +106,15 @@ have, and a client that trusts it will request 404s.
 
 ## The item index
 
-One GeoParquet per quarter, at `quarter=YYYY.Qn/items.parquet`, sorted by tile
-and then datetime so one tile's 36-quarter history is a contiguous run.
+One GeoParquet per quarter, at `quarter=YYYY.Qn/items.parquet`, sorted by
+`_tile`, then `datetime`, then `_subtile`, so one tile's 36-quarter history is a
+contiguous run. The `_subtile` tiebreak matters because `datetime` is constant
+within a quarter file and some MGRS cells hold more than one mosaic tile;
+without it those rows would have no defined order.
+
+The columns and their types are in [`collection.json`](collection.json) under
+`table:columns`. That array is generated from `tools/schema.py`, the same list
+the writer casts to, so the documentation and the file cannot disagree.
 
 **It is not published yet.** `table:row_count` is 0 and `partition:file_count`
 is 0 until the first backfill lands. Each quarter gains an `item` link as its

@@ -246,7 +246,7 @@
     {
       "name": "quarter",
       "type": "string",
-      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by MGRS tile and then datetime, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The dot rather than a hyphen keeps the value sorting in calendar order as a string. No partition file is published yet; each quarter gains its `item` link and its file as the backfill reaches it."
+      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The `_subtile` tiebreak is what makes the order deterministic: `datetime` is constant inside a quarter file, and some MGRS cells carry more than one mosaic tile, so `_tile` and `datetime` alone leave those rows unordered. The dot rather than a hyphen keeps the value sorting in calendar order as a string. No partition file is published yet; each quarter gains its `item` link and its file as the backfill reaches it."
     }
   ],
   "partition:file_count": 0,
@@ -257,12 +257,12 @@
     {
       "name": "id",
       "type": "string",
-      "description": "The upstream item id, `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`. Unique across the whole collection."
+      "description": "The upstream item id, `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`. Unchanged from CDSE, so it joins straight against the source catalog."
     },
     {
       "name": "datetime",
       "type": "timestamp[us, tz=UTC]",
-      "description": "The first instant of the quarter the mosaic composites, not an acquisition time. Use start_datetime and end_datetime for the real window."
+      "description": "The first instant of the quarter the mosaic composites, not an acquisition time. The compositing window is start_datetime to end_datetime."
     },
     {
       "name": "start_datetime",
@@ -277,17 +277,17 @@
     {
       "name": "_tile",
       "type": "string",
-      "description": "The bare MGRS grid cell, for example `31UFU`. Join key against the coverage collection's `mgrs_tile`. Not unique: one tile has up to 36 rows, one per quarter."
+      "description": "The bare MGRS grid cell, for example `31UFU`. Join key against the coverage collection, and the first sort key. Query helper, not STAC."
     },
     {
       "name": "_subtile",
       "type": "string",
-      "description": "The full mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. One MGRS cell can carry more than one mosaic tile, so this and not `_tile` is the spatial unit of a row."
+      "description": "The full mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. Unique within a quarter. Query helper, not STAC."
     },
     {
       "name": "_quarter",
       "type": "string",
-      "description": "The partition value, `YYYY.Qn`. Present in the row as well as the directory name so a query over concatenated files keeps it without hive partitioning enabled."
+      "description": "The partition value, `YYYY.Qn`. Present in the row as well as the directory name, so a glob across quarters keeps it. Query helper, not STAC."
     },
     {
       "name": "grid:code",
@@ -297,7 +297,7 @@
     {
       "name": "proj:code",
       "type": "string",
-      "description": "The tile's own CRS as an authority code, for example `EPSG:32631`. Every tile is in the UTM zone of its MGRS cell, so this column takes over 120 distinct values across the collection. Nothing here is in one projection."
+      "description": "The tile's own CRS as an authority code, for example `EPSG:32631`. Every tile is in its MGRS zone's UTM projection, not in EPSG:4326."
     },
     {
       "name": "proj:shape",
@@ -317,7 +317,7 @@
     {
       "name": "constellation",
       "type": "string",
-      "description": "Always `sentinel-2`. The mosaic composites observations from both Sentinel-2A and Sentinel-2B, so there is no single `platform`."
+      "description": "Always `sentinel-2`. The mosaic composites observations from both Sentinel-2 satellites, so there is no single `platform`."
     },
     {
       "name": "instruments",
@@ -337,7 +337,7 @@
     {
       "name": "B02_href",
       "type": "string",
-      "description": "Full https URL of the blue COG. Promoted out of the assets JSON so a reader gets a URL without parsing."
+      "description": "Full https URL of the blue COG. Promoted out of the assets JSON so a reader can open a band without parsing it."
     },
     {
       "name": "B03_href",
@@ -357,7 +357,7 @@
     {
       "name": "assets",
       "type": "string",
-      "description": "The item's whole `assets` object as a JSON string, verbatim. Parse it with `json_extract` in DuckDB or `JSON.parse` in a browser. It carries `file:size`, `proj:transform` and `proj:shape` per band. It is a string and not a struct, so the schema does not change when an asset field is added."
+      "description": "The item's whole `assets` object as a JSON string, verbatim. Parse it with `json_extract` in DuckDB or `JSON.parse` in a browser. It carries `file:size`, `proj:transform` and `proj:shape` per band."
     },
     {
       "name": "links",
@@ -377,7 +377,7 @@
     {
       "name": "geometry",
       "type": "geometry",
-      "description": "The tile footprint in EPSG:4326, as a Polygon, or a MultiPolygon split at 180 degrees for tiles that cross the antimeridian. Each edge is densified before reprojection, so it follows the true curve of the UTM square to under two metres. Last column in the file, and the table's primary geometry."
+      "description": "The tile footprint in EPSG:4326, as a Polygon, or a MultiPolygon split at 180 degrees for tiles that cross the antimeridian. Each edge is densified before reprojection, so it follows the true curve of the UTM square to under two metres."
     }
   ],
   "links": [

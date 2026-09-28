@@ -149,7 +149,13 @@ observations backed each pixel was not mirrored. You cannot tell a pixel backed
 by 40 observations from one backed by 2. If that distinction matters, go to CDSE
 for the original product.
 
-**Antimeridian tiles exist.** Tiles in MGRS zone 01 and zone 60 sit either side
-of 180°. Some are modelled as a MultiPolygon split at the antimeridian rather
-than a wrapped bbox. A naive `ST_Intersects` against a box spanning 180° will
-behave unexpectedly.
+**Antimeridian tiles exist, and their bboxes look wrong.** Tiles in MGRS zones
+01 and 60 sit either side of 180°. In 2024 Q2, **125 of 28,272 tiles** cross it.
+Each is a MultiPolygon split at 180° rather than a wrapped polygon, and its
+`bbox` has `west > east`, which is what RFC 7946 requires for a geometry that
+crosses the antimeridian.
+
+That means a filter written as `bbox[0] < x AND x < bbox[2]` silently drops
+every one of those 125 tiles, and a bounds check that asserts `west <= east`
+will reject them as malformed. Neither raises an error. Handle the wrap
+explicitly, or exclude zones 01 and 60 knowingly rather than by accident.
