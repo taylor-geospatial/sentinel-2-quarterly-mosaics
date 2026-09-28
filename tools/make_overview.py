@@ -59,6 +59,19 @@ zero in all three bands becomes transparent. With the exponent applied, a
 reflectance of 1 already maps to 4, so this is genuinely only the
 all-zero pixel, which is a sensor gap rather than a dark surface.
 
+2026 Q2 reads differently
+-------------------------
+Every quarter from 2017 to 2025 stores its COGs in 1024 x 1024 blocks;
+2026 Q2, which finished transferring on 2026-09-28, uses 256 x 256. The
+overview *levels* are unchanged (2x through 32x, down to 313 x 313), so
+`overview_level()` picks the same one and the bytes read are the same.
+Only the request count moves, and GDAL's merging of consecutive ranges
+absorbs most of it: measured on 31UFU_0_0, reading the 32x overview took
+2 range requests in 2024 Q2 and 3 in 2026 Q2, and the 16x overview the
+same 2 against 3. Nothing here assumes a block size, and the tile origins
+are identical between the two vintages, so no code changes for it -- but
+if a quarter ever needs a per-request budget, that is the difference.
+
 Size
 ----
 At zoom 10 the world is 262,144 px square, but the mosaic only covers
@@ -71,7 +84,6 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import json
-import math
 import os
 import shutil
 import subprocess
