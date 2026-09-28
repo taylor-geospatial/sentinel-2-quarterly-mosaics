@@ -20,10 +20,11 @@ export const BAND_INFO = {
 export const NODATA = -32768;
 
 // The default stretch: 0 to 3000 in stored units is 0 to 0.30 reflectance,
-// which covers land from dark water to bright bare soil while letting only
-// cloud and snow clip. Gamma 1/1.8 lifts the midtones, because a linear ramp
-// of reflectance looks muddy — most vegetated land sits under 0.15 and would
-// otherwise occupy the bottom eighth of the range.
+// which covers land from dark water to bright bare soil. Gamma 1/1.8 lifts the
+// midtones, because a linear ramp of reflectance looks muddy — most vegetated
+// land sits under 0.15 and would otherwise occupy the bottom eighth of the
+// range. What lies above 0.30 — cloud, snow, salt — is not clipped but rolled
+// off; see the shoulder on `ramp` below.
 export const PRESETS = {
   natural: {
     id: "natural",
@@ -50,16 +51,40 @@ export const PRESETS = {
 
 export const bandsOf = (spec) => [...new Set(spec.bands)];
 
-// A 256-entry lookup from stored band value to byte, built once per stretch so
-// the per-pixel work is an index rather than a pow().
+// The gamma curve runs to white at `max` and everything brighter slams into it.
+// Over the Alps in Q2 that is most of the frame: snow sits at 0.5–0.9
+// reflectance against a 0.30 ceiling, so a pitched camera looks at a flat white
+// sheet and the terrain it is draped on stops reading as terrain at all.
+//
+// So the top of the curve gets a shoulder. Below SHOULDER of full white the
+// ramp is exactly the gamma curve it always was — with gamma 1.8 that is
+// everything under 0.75 of the stretch, which is all vegetated land and all
+// bare soil, and those pixels are byte-for-byte unchanged. Above it the curve
+// approaches white asymptotically instead of reaching it, so 0.3 to 0.9
+// reflectance spreads across the last two dozen levels rather than collapsing
+// into one. Snow still reads as white; it just keeps its shape.
+const SHOULDER = 0.85;
+// How far past `max` the table runs. Fresh snow tops out near 0.9 reflectance,
+// three times a 0.30 ceiling; four leaves room above that for specular ice.
+const HEADROOM = 4;
+// Chosen so the shoulder is within a byte of white by 2.5x the ceiling — far
+// enough to hold gradation across snow, near enough that it never looks grey.
+const KNEE = 0.646;
+
+// A lookup from stored band value to byte, built once per stretch so the
+// per-pixel work is an index rather than a pow(). `span` converts a stored
+// value to a table index; the caller clamps.
 function ramp({ min, max, gamma }) {
   const table = new Uint8ClampedArray(4096);
+  const tk = SHOULDER ** gamma;     // where the gamma curve reaches SHOULDER
   for (let i = 0; i < table.length; i++) {
-    const v = min + ((max - min) * i) / (table.length - 1);
-    const t = Math.max(0, Math.min(1, (v - min) / (max - min)));
-    table[i] = Math.round(255 * t ** (1 / gamma));
+    const t = (HEADROOM * i) / (table.length - 1);
+    const y = t <= tk
+      ? t ** (1 / gamma)
+      : 1 - (1 - SHOULDER) * Math.exp(-(t - tk) / KNEE);
+    table[i] = Math.round(255 * y);
   }
-  return { table, min, max };
+  return { table, min, span: (table.length - 1) / ((max - min) * HEADROOM) };
 }
 
 // NDVI's colour ramp. Brown through straw to green, which is the convention
@@ -129,8 +154,7 @@ export function paintRGBA(planes, spec, W, H) {
     return new ImageData(out, W, H);
   }
 
-  const { table, min, max } = ramp(spec);
-  const span = (table.length - 1) / (max - min);
+  const { table, min, span } = ramp(spec);
   const chans = spec.bands.map((b) => planes[b]);
   for (let i = 0; i < W * H; i++) {
     let ok = true;
