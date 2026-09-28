@@ -33,3 +33,7 @@ __pycache__/
 *.pyc
 .venv/
 .ruff_cache/
+
+# Local virtualenv for the pipeline tools (tools/rails/environment.yml is
+# the real one; this is for running them on a laptop).
+.venv-tools/
