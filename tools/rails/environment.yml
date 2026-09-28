@@ -39,10 +39,17 @@ dependencies:
   - libgdal-core
   - rasterio>=1.3
   - numpy
-  - boto3
   - pytz
   - tippecanoe
   - pip
   - pip:
+      # boto3 is installed here rather than from conda-forge so that pip
+      # resolves it together with geoparquet-io. gpio depends on s3fs,
+      # which depends on aiobotocore, which pins botocore hard; a
+      # conda-forge boto3 installed first is then downgraded underneath
+      # and pip reports the pair as incompatible. Resolved together they
+      # agree, and `pip check` is clean. Uploading is the last step of a
+      # two-hour job, so it is not a place for a latent version conflict.
       - geoparquet-io==1.5.0
+      - boto3
       - pmtiles

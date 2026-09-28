@@ -22,7 +22,11 @@
 #
 # DRY_RUN=1 prints the commands. SMOKE=1 builds $SMOKE_TILES of
 # $SMOKE_YEAR $SMOKE_QUARTER under a _smoke key prefix, which is the
-# rehearsal to run before the first real quarter.
+# rehearsal to run before the first real quarter. UPLOAD=0 builds
+# everything and publishes nothing, which is how a quarter gets built on
+# a machine that has no Source Cooperative credentials yet -- the
+# credential preflight is skipped too, so the job does not refuse to
+# start over an identity it will never use.
 #SBATCH --job-name=s2mos-quarter
 #SBATCH --partition=cpu
 #SBATCH --account=bgtj-tgirails
@@ -47,8 +51,10 @@ VERIFY="${VERIFY:-200}"
 ITEMS="$WORK/items"
 
 echo "=== $YEAR $QUARTER  work=$WORK publish=$PUBLISH zoom=$ZOOM smoke=$SMOKE"
-# Fail now rather than after six hours of building.
-[ "$DRY_RUN" = 1 ] || check_creds
+# Fail now rather than after six hours of building. A build-only run has
+# no upload to be denied, so it needs no identity.
+UPLOAD="${UPLOAD:-1}"
+[ "$DRY_RUN" = 1 ] || [ "$UPLOAD" = 0 ] || check_creds
 
 # 1. Items. The manifest is a 2.8 MB download; everything else is derived.
 if [ -s "$WORK/$PART/items.ndjson" ]; then
@@ -85,6 +91,13 @@ run python3 "$REPO/tools/make_footprints.py" --work "$WORK" --out "$PUBLISH"
 
 # 6. Upload. Data files first: an item JSON that points at a parquet that
 #    is not there yet is a worse intermediate state than the reverse.
+if [ "$UPLOAD" = 0 ]; then
+  echo "UPLOAD=0: built everything, publishing nothing"
+  echo "  $PUBLISH/mosaics/$PART/"
+  ls -la "$PUBLISH/mosaics/$PART/" 2>/dev/null || true
+  echo "=== $YEAR $QUARTER done (build only)"
+  exit 0
+fi
 UP=(
   "mosaics/$PART/items.parquet"
   "mosaics/$PART/overview.tif"
