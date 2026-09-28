@@ -248,6 +248,25 @@ is not folded in yet rather than any doubt about the bytes.
 manifest. Do not read it as data, and do not treat its absence from a manifest
 glob as evidence the quarter does not exist upstream.
 
+**Python's `urllib` gets 403 on public objects.** The CDN in front of this
+bucket rejects the default `Python-urllib/3.x` User-Agent with
+`HTTP Error 403: Forbidden`, including on objects that are unquestionably
+public. It is not a permissions problem, the object is not missing, and no
+credential will fix it. Measured on 2026-09-28 against
+`_status/2024/Q2/complete.json`: the default User-Agent returns 403 and the
+identical request with `User-Agent: curl/8.0` returns 200.
+
+```python
+import urllib.request
+req = urllib.request.Request(url, headers={"User-Agent": "my-tool/1.0"})
+body = urllib.request.urlopen(req).read()   # any non-default UA works
+```
+
+`curl`, DuckDB's `httpfs`, GDAL's `/vsicurl` and `requests` all send their own
+User-Agent and are unaffected, which is why every recipe here works. This only
+bites hand-rolled `urllib` code, and it looks exactly like an access failure
+when it happens.
+
 **A finished quarter is a snapshot, not a permanent record.** Upstream
 reprocesses old quarters, so a quarter copied here can drift from its CDSE
 original. Compare manifests rather than assuming immutability.

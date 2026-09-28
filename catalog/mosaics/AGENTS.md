@@ -37,6 +37,11 @@ def cog_url(year, quarter, subtile, band):
 Verified on 2026-09-28: `cog_url(2024, "Q2", "31UFU_0_0", "B04")` returns
 `HTTP/2 200`, `accept-ranges: bytes`, `access-control-allow-origin: *`.
 
+Do not fetch it with a bare `urllib.request.urlopen(...)`. The CDN rejects
+Python's default User-Agent with a 403 that looks like a permissions failure.
+Set any User-Agent of your own, or use `requests`, GDAL or DuckDB, which all
+send one. The catalog agent guide has the measurement.
+
 Read a window without downloading the tile:
 
 ```bash
