@@ -73,8 +73,16 @@ check_creds() {
 }
 
 # Base resolution of the browse overview, as a Web Mercator zoom level.
-# 10 is 152.87 m/px. Each step down is a quarter of the pixels.
-export ZOOM="${ZOOM:-10}"
+# 9 is 305.75 m/px; each step up is four times the pixels and four times
+# the reads (zoom 10 reads the 16x tile overview rather than the 32x:
+# ~51 GB a quarter against ~13 GB).
+#
+# This is one number for all 36 quarters, and it is deliberate. The
+# browse layer exists to be scrubbed through time, so two quarters at
+# different base resolutions would make every transition between them
+# look like a change in the scene. Raising it means rebuilding all 36,
+# not just the next one.
+export ZOOM="${ZOOM:-9}"
 # How many tiles per quarter get their valid_fraction measured. Each one
 # is a 313 x 313 read of the red band's smallest overview.
 export VALID_FRACTION="${VALID_FRACTION:-2000}"

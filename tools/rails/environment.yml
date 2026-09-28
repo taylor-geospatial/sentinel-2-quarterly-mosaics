@@ -16,6 +16,10 @@
 # * rasterio   the geometry verification gate (make_items.py --verify)
 #   and valid_fraction (make_coverage.py), both of which read COG
 #   headers and small overviews over https
+# * rio-cogeo  `rio cogeo validate` on the overview before it is
+#   published. The COG driver can write a file that a strict reader
+#   still rejects, so the browse layer is checked rather than assumed,
+#   and the check has to live on the machine that builds it
 # * tippecanoe + pmtiles  the footprints tileset
 # * boto3      the uploads
 #
@@ -38,6 +42,7 @@ dependencies:
   - gdal>=3.8
   - libgdal-core
   - rasterio>=1.3
+  - rio-cogeo
   - numpy
   - pytz
   - tippecanoe
