@@ -4,12 +4,19 @@
 # never placed under publish_dir, so they cannot be published by accident.
 #
 # The S3 URI uploads are written to. Copy it from your storage provider.
-# Source Cooperative serves the tge-labs account out of us-west-2; the bucket
-# name carries the region, and the prefix is the product slug.
-write_prefix: s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+# Since the 0.3 CLI, Source Cooperative is a data proxy rather than plain S3:
+# the bucket is the account name and the product slug is the key prefix.
+write_prefix: s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+
+# Source Cooperative is a data proxy, not plain S3. The credentials the
+# source-coop CLI issues are only valid against this endpoint, and the
+# bucket above is the account name rather than a hostname. Leave this out
+# for ordinary AWS S3.
+endpoint_url: https://data.source.coop
 
 # The public base URL that serves write_prefix. Every href in the catalog is
 # built from this, so it goes in the STAC JSON and write_prefix does not.
+# Unchanged by the move to the proxy: it already named data.source.coop.
 public_base: https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics
 
 region: us-west-2
