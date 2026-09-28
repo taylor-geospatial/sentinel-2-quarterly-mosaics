@@ -1,0 +1,522 @@
+/* Thirty-six Earths.
+ *
+ * The imagery is the page. Everything here is built to get out of its way and
+ * then, in exactly one place, to be loud: the filmstrip, which is the only
+ * element allowed colour, weight or motion.
+ *
+ * Colour. A deep blue-slate, because the opening state is a globe in space and
+ * the chrome should read as the dark side of the same picture. One accent:
+ * magenta. That is not a brand choice — it is the remote-sensing convention for
+ * annotation, picked because nothing in natural-colour satellite imagery is
+ * magenta, so a playhead in it can never be mistaken for ground. Load state
+ * carries no colour at all: a frame with data shows the data, and that is the
+ * signal.
+ *
+ * Type. Archivo, one variable family, using its width axis as a design element
+ * rather than a fallback — the slate is set wide and light, like a film slate,
+ * and the interface is set at normal width. IBM Plex Mono appears only where
+ * characters have to line up in a column or be copied exactly: MGRS codes,
+ * asset URLs, byte counts.
+ */
+
+:root {
+  --void: #060a14;          /* space behind the globe */
+  --band: #0b111c;          /* the instrument band */
+  --band-lift: #101828;     /* raised elements inside it */
+  --edge: #1d2838;          /* hairlines */
+  --edge-soft: #151f2e;
+  --ink: #e8eef6;
+  --ink-mid: #9aabc0;
+  --ink-dim: #61748c;
+  --live: #ff4fa3;          /* the playhead, and nothing else */
+  --live-soft: #ff4fa333;
+
+  --band-h: 156px;
+  --frame-w: 34px;
+  --radius: 3px;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--ink);
+  font-family: Archivo, system-ui, sans-serif;
+  font-variation-settings: "wdth" 100;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- map ---- */
+
+#map {
+  position: absolute;
+  inset: 0 0 var(--band-h) 0;
+  background: var(--void);
+}
+
+/* Attribution is a licence condition, not chrome, so it is legible over bright
+   terrain and bright imagery alike rather than tuned to look quiet over dark.
+   MapLibre ships a light default at two-class specificity, so these match it. */
+.maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: #060a14e6;
+  color: #b9c8da;
+  font-size: 10.5px;
+  padding: 3px 7px;
+  border-radius: var(--radius);
+}
+.maplibregl-ctrl.maplibregl-ctrl-attrib a { color: #dce6f2; }
+
+.maplibregl-ctrl.maplibregl-ctrl-scale {
+  background: #060a14e6;
+  color: #b9c8da;
+  border-color: #46596f;
+  border-radius: var(--radius);
+  font-size: 10px;
+}
+/* The licence asks for this to be visible, so it is not compacted behind a
+   disclosure triangle — but it does need to sit inside the viewport. */
+.maplibregl-ctrl-bottom-right { bottom: 2px; }
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 8px 6px 0; }
+.maplibregl-ctrl-attrib { max-width: calc(100vw - 24px); white-space: nowrap; }
+.maplibregl-ctrl-group { background: #0b111ce6; border: 1px solid var(--edge); }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--edge); }
+.maplibregl-ctrl-group button span { filter: invert(1) hue-rotate(180deg); }
+
+/* -------------------------------------------------------------- slate ---- */
+/* The quarter on show. Set very wide and very light at a large size: this is
+   the one piece of typography doing work as an image rather than as a label. */
+
+#slate {
+  position: absolute;
+  left: 26px;
+  bottom: calc(var(--band-h) + 20px);
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45ch;
+  text-shadow: 0 2px 30px #060a14cc, 0 1px 3px #060a14;
+  transition: opacity 180ms ease;
+}
+
+#slate-year {
+  font-variation-settings: "wdth" 125, "wght" 200;
+  font-size: clamp(38px, 6.2vw, 78px);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+}
+
+#slate-q {
+  font-variation-settings: "wdth" 125, "wght" 600;
+  font-size: clamp(20px, 3vw, 36px);
+  line-height: 1;
+  color: var(--live);
+}
+
+#slate-months {
+  font-variation-settings: "wdth" 88, "wght" 400;
+  font-size: 12px;
+  color: var(--ink-mid);
+  margin-left: 0.8ch;
+  padding-bottom: 0.4em;
+}
+
+body.is-empty #slate { opacity: 0; }
+
+/* -------------------------------------------------------------- intro ---- */
+
+#intro {
+  position: absolute;
+  inset: 0 0 var(--band-h) 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 45%, #0d1626 0%, #060a14 70%);
+  transition: opacity 700ms ease, visibility 700ms;
+  padding: 24px;
+}
+#intro.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.intro-inner { max-width: 46ch; text-align: left; }
+
+#intro h1 {
+  font-variation-settings: "wdth" 125, "wght" 200;
+  font-size: clamp(34px, 7vw, 76px);
+  line-height: 0.95;
+  margin: 0 0 0.5em;
+}
+#intro p {
+  margin: 0 0 0.9em;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-mid);
+  max-width: 44ch;
+}
+.intro-state {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+/* --------------------------------------------------------------- band ---- */
+
+#band {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: var(--band-h);
+  z-index: 5;
+  background: linear-gradient(180deg, var(--band) 0%, #080d16 100%);
+  border-top: 1px solid var(--edge);
+  display: flex;
+  flex-direction: column;
+}
+
+#transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px 7px;
+  border-bottom: 1px solid var(--edge-soft);
+}
+
+.t-btn {
+  width: 27px; height: 27px;
+  display: grid; place-items: center;
+  background: var(--band-lift);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  color: var(--ink-mid);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+.t-btn:hover { color: var(--ink); border-color: #2c3c52; }
+.t-btn[aria-pressed="true"] { color: var(--live); border-color: var(--live); }
+
+#hint {
+  margin: 0 auto 0 10px;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+#tools { display: flex; align-items: center; gap: 12px; }
+
+#presets { display: flex; gap: 4px; }
+#presets.is-inactive { opacity: 0.4; }
+#presets .t-toggle:disabled { cursor: default; }
+
+.tool {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; color: var(--ink-dim);
+}
+.tool input[type=range] {
+  width: 74px; height: 2px; appearance: none;
+  background: var(--edge); border-radius: 2px; cursor: pointer;
+}
+.tool input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--ink-mid); cursor: pointer;
+}
+.tool input[type=range]::-moz-range-thumb {
+  width: 11px; height: 11px; border: 0; border-radius: 50%;
+  background: var(--ink-mid); cursor: pointer;
+}
+
+.t-toggle {
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  color: var(--ink-dim);
+  font-size: 11.5px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+.t-toggle:hover { color: var(--ink); }
+.t-toggle[aria-pressed="true"] { color: var(--ink); border-color: #33465e; }
+
+/* ---------------------------------------------------------- filmstrip ---- */
+/* 36 frames in 9 year-groups. Each frame is a live picture of the middle of the
+   viewport in that quarter, painted tile by tile as the stack loads. The gap
+   between year groups is the only structure: no numbering, no ticks, no legend,
+   because the frames say it themselves. */
+
+#strip {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 13px;
+  padding: 8px 18px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: ew-resize;
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge) transparent;
+  touch-action: pan-x;
+}
+#strip::-webkit-scrollbar { height: 4px; }
+#strip::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 2px; }
+
+.year {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 0;
+  min-width: calc(var(--frame-w) * 2);
+}
+
+.year-frames { display: flex; gap: 2px; flex: 1; min-height: 0; }
+
+.year-label {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.frame {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: #0f1724;
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+  cursor: inherit;
+  overflow: hidden;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+.frame canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.frame.has-image canvas { opacity: 1; }
+
+/* The quarter label lives inside the frame, dropped out of the image. It
+   disappears once there is a picture worth looking at. */
+.frame-q {
+  position: absolute;
+  inset: auto 0 2px 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  color: var(--ink-dim);
+  text-align: center;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+.frame.has-image .frame-q { opacity: 0; }
+
+.frame:hover { box-shadow: inset 0 0 0 1px #3c5069; }
+
+/* The playhead. The only magenta on the page. */
+.frame.is-current {
+  box-shadow: inset 0 0 0 2px var(--live), 0 0 18px var(--live-soft);
+  transform: translateY(-2px);
+}
+.frame.is-current .frame-q { color: var(--live); opacity: 1; }
+.frame.is-current.has-image .frame-q { opacity: 0; }
+
+/* Not published. Hatched, dim, and not clickable — the gap in the record is
+   information, so it is drawn rather than hidden. */
+.frame.is-absent {
+  background: repeating-linear-gradient(135deg,
+    #0c1320 0 4px, #0a101b 4px 8px);
+  box-shadow: inset 0 0 0 1px #131c2a;
+  cursor: not-allowed;
+}
+.frame.is-absent .frame-q { color: #35435a; }
+.frame.is-unknown { opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .frame, .frame canvas, .frame-q, #intro, #slate { transition: none; }
+}
+
+/* ---------------------------------------------------------- inspector ---- */
+
+#inspector {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--band-h);
+  width: min(400px, 100%);
+  z-index: 4;
+  overflow-y: auto;
+  padding: 20px 22px 32px;
+  background: #080d16f2;
+  backdrop-filter: blur(14px);
+  border-left: 1px solid var(--edge);
+  font-size: 13px;
+}
+#inspector[hidden] { display: none; }
+
+.ins-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
+.ins-head h2 {
+  margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.ins-sub { margin: 3px 0 0; color: var(--ink-dim); font-size: 11.5px; }
+.ins-close {
+  margin-left: auto; background: none; border: 0; cursor: pointer;
+  color: var(--ink-dim); font-size: 15px; line-height: 1; padding: 2px 4px;
+}
+.ins-close:hover { color: var(--ink); }
+
+#inspector h3 {
+  margin: 0 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mid);
+}
+
+.ins-history { margin-bottom: 24px; }
+
+/* The cell's own nine years as a bar per quarter: compressed size, which for
+   lossless Int16 rasters tracks how much real variation the quarter holds. */
+.hq-grid {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 66px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--edge);
+}
+.hq {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.hq-bar {
+  width: 100%;
+  background: #33506e;
+  border-radius: 1px 1px 0 0;
+  transition: background 120ms;
+}
+.hq:hover .hq-bar { background: #4b6e91; }
+.hq.is-current .hq-bar { background: var(--live); }
+.hq.is-absent { cursor: not-allowed; }
+.hq.is-absent::after {
+  content: "";
+  width: 100%; height: 3px;
+  background: #1b2636;
+  align-self: flex-end;
+}
+
+/* One label per year under the 36 bars, so a bar's height can be read against
+   a date rather than a position. */
+.hq-years {
+  display: flex;
+  margin-top: 4px;
+}
+.hq-years span {
+  flex: 1 1 0;
+  text-align: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  color: var(--ink-dim);
+}
+
+.ins-plan, .ins-wait {
+  margin: 8px 0 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.ins-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+  font-size: 11.5px;
+}
+.ins-meta dt { color: var(--ink-dim); }
+.ins-meta dd { margin: 0; color: var(--ink-mid); }
+.ins-meta code { font-size: 10.5px; word-break: break-all; }
+
+code, .url {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--ink-mid);
+}
+
+.asset-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.asset-list li {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--edge-soft);
+}
+.band {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink);
+}
+.asset-list .url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copy {
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  color: var(--ink-dim);
+  font-size: 10.5px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.copy:hover { color: var(--ink); border-color: #33465e; }
+.copy.wide { width: 100%; padding: 7px; }
+
+.noscript {
+  position: absolute; inset: 0; z-index: 20;
+  display: grid; place-items: center; padding: 40px;
+  background: var(--void); color: var(--ink-mid); text-align: center;
+}
+
+/* ----------------------------------------------------------- narrower ---- */
+
+@media (max-width: 900px) {
+  :root { --band-h: 138px; }
+  #hint { display: none; }
+  #slate { left: 16px; }
+  #inspector { width: 100%; }
+  .year { min-width: calc(var(--frame-w) * 2.4); flex: 0 0 auto; }
+  #strip { gap: 10px; }
+}
+
+@media (max-width: 560px) {
+  #tools .tool { display: none; }
+  #transport { padding: 8px 12px 6px; }
+  #strip { padding: 8px 12px 6px; }
+}

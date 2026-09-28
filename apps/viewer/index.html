@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thirty-six Earths</title>
+<meta name="description" content="Nine years of cloudless Sentinel-2 mosaics, one frame per quarter. Pick anywhere on the planet and scrub through time.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23060a14'/%3E%3Ccircle cx='8' cy='8' r='5' fill='none' stroke='%23ff4fa3' stroke-width='1.5'/%3E%3Cpath d='M8 3v10' stroke='%23ff4fa3' stroke-width='1.5'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<div id="map" aria-label="Map"></div>
+
+<!-- The quarter on show, over the imagery at the map's lower left. Set wide
+     and light, like a slate held up to the lens before a take. -->
+<div id="slate" aria-live="polite">
+  <span id="slate-year">&mdash;</span><span id="slate-q"></span>
+  <span id="slate-months"></span>
+</div>
+
+<!-- Arrival. Replaced by the map once the first quarter is on screen. -->
+<div id="intro">
+  <div class="intro-inner">
+    <h1>Thirty-six Earths</h1>
+    <p>Every quarter from 2017 to 2025, composited free of cloud from Sentinel-2.
+       Pick anywhere and flip through nine years of it.</p>
+    <p class="intro-state" id="intro-state">Finding out which quarters are published&hellip;</p>
+  </div>
+</div>
+
+<!-- The instrument. One grounded band across the foot of the screen: the
+     filmstrip, the transport, and the readouts. Not a sidebar of filters. -->
+<div id="band">
+  <div id="transport">
+    <button id="play" class="t-btn" type="button" aria-label="Play through the quarters">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3 2l11 6-11 6z" fill="currentColor"/></svg>
+    </button>
+    <button id="prev" class="t-btn" type="button" aria-label="Previous quarter">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M10 2L4 8l6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <button id="next" class="t-btn" type="button" aria-label="Next quarter">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M6 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <p id="hint">Drag the strip, or use the arrow keys. Space plays.</p>
+    <div id="tools">
+      <div id="presets" role="group" aria-label="Band combination"></div>
+      <label class="tool">
+        <span>Relief</span>
+        <input id="exag" type="range" min="0" max="2.5" step="0.05" value="1.25"
+               aria-label="Terrain exaggeration">
+      </label>
+      <button id="grid" class="t-toggle" type="button" aria-pressed="true">Grid</button>
+      <button id="home" class="t-toggle" type="button">Globe</button>
+    </div>
+  </div>
+  <div id="strip"></div>
+</div>
+
+<!-- One cell's nine years, its metadata and the URLs behind it. Rises from the
+     right edge of the map area rather than floating over it. -->
+<aside id="inspector" hidden></aside>
+
+<noscript>
+  <div class="noscript">This viewer reads Cloud-Optimized GeoTIFFs and parquet
+  directly from object storage in the browser, so it needs JavaScript.</div>
+</noscript>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
