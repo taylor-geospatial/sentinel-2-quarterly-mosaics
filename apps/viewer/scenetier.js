@@ -107,7 +107,10 @@ export class SceneTier {
 
     const c = this.map.getCenter();
     return [...inView]
-      .map((subtile) => ({ subtile, bounds: pad(boxes.get(subtile)) }))
+      .map((subtile) => {
+        const b = boxes.get(subtile);
+        return { subtile, bounds: straddles(b) ? null : pad(b) };
+      })
       .sort((a, b) => centreDist(a.bounds, c) - centreDist(b.bounds, c))
       .slice(0, MAX_CELLS);
   }
@@ -212,14 +215,22 @@ function featureBounds(f) {
       if (y < s) s = y; if (y > n) n = y;
     }
   }
-  // A cell that straddles the antimeridian comes back as a bbox spanning the
-  // whole planet, which would let MapLibre request the entire world for it.
-  // 125 cells per quarter are like this; a bounds of the visible half is
-  // wrong, so the honest answer is no bounds at all and let the tile reads
-  // return transparent where the cell is not.
-  if (e - w > 180) return null;
+  if (straddles([w, s, e, n])) return null;
   return [w, s, e, n];
 }
+
+// A cell that straddles the antimeridian comes back as a bbox spanning the
+// whole planet, which would let MapLibre request the entire world for it. 125
+// cells per quarter are like this; a bounds of the visible half is wrong, so
+// the honest answer is no bounds at all and let the tile reads return
+// transparent where the cell is not.
+//
+// This has to be asked of the union in visibleCells and not only of each
+// feature, because such a cell usually arrives as two features in two
+// different vector tiles — one ring at +179, one at -179 — each an honest
+// narrow bbox on its own side. Only their union spans the planet, and it is
+// the union that becomes the source bounds.
+const straddles = (b) => !!b && b[2] - b[0] > 180;
 
 // A cell is 100.08 km on a side; 4% of its own span is a few kilometres of
 // slack, enough to cover what tile clipping shaved off an edge.
