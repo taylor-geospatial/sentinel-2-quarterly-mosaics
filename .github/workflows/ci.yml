@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # rashid takes a floor, not a pin. A pin goes stale the day the template
+      # is created and every repo made from it inherits the stale version. A
+      # floor takes each new 0.1.x release and still refuses a rashid that does
+      # not carry the rules tests/test_conformance.py asserts. The gate checks
+      # the same range at run time, so a local rashid cannot be older.
+      #
+      # stac-check stays unpinned on purpose. The stac-check exemption in
+      # docs/conformance.md expires when the upstream crash stops. That only
+      # happens if CI takes each new release.
+      - name: Install the validators
+        run: python -m pip install 'rashid>=0.1.5,<0.2.0' stac-check
+
+      - name: Lint the tooling
+        run: |
+          python -m pip install pyflakes
+          pyflakes tools/*.py tests/*.py
+
+      # CI_LIGHT exempts asset hrefs with a data suffix from the link check.
+      # The checkout holds the metadata and not the bytes. Structural links
+      # and every non-data asset still resolve. Leave it unset locally.
+      - name: Catalog gates
+        env:
+          CI_LIGHT: "1"
+        run: python3 tests/run_all.py

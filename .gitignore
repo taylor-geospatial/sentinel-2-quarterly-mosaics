@@ -1,0 +1,35 @@
+# Category 3: neither tracked in git nor published.
+#
+# Data files are generated or downloaded, live in object storage, and are
+# never committed. The metadata under catalog/ IS committed; only the bytes it
+# describes are not. Git keeps every version of a binary forever, so one large
+# file committed once is paid for by every clone from then on, and deleting it
+# later reclaims nothing.
+*.parquet
+*.pmtiles
+*.tif
+*.tiff
+*.zarr/
+*.copc.laz
+*.laz
+*.geojsonl
+*.gpkg
+*.shp
+*.zip
+
+# Downloaded sources and build scratch. Re-fetchable by your own tooling.
+sources/
+staging/*/data/
+.cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS, editor, and tooling noise
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
