@@ -176,10 +176,20 @@ class FakeSession:
         self.calls: list = []
         self.clients = 0
         self.fail_key = fail_key
+        self.endpoints: list = []
 
-    def client(self, name):
+    # s3_client() passes endpoint_url on every call, so the fake takes it too.
+    # It is recorded rather than ignored: reaching the right host is the whole
+    # point of the key, and a fake that swallowed it would pass either way.
+    def client(self, name, endpoint_url=None):
         self.clients += 1
+        self.endpoints.append(endpoint_url)
         return FakeClient(self.calls, self.fail_key)
+
+
+# Source Cooperative is a data proxy, so uploads carry an endpoint_url. An
+# ordinary AWS S3 catalog has no such key, and both paths are checked below.
+PROXY_CONFIG = {"endpoint_url": "https://data.source.coop"}
 
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -192,8 +202,12 @@ with tempfile.TemporaryDirectory() as tmp:
     session = FakeSession()
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
-        failed = upload_all(session, "a-bucket", batch)
+        failed = upload_all(session, "a-bucket", batch, PROXY_CONFIG)
     check(failed == [], "no failures")
+    check(
+        set(session.endpoints) == {"https://data.source.coop"},
+        "endpoint_url reaches every client the pool builds",
+    )
     check(
         {c[2] for c in session.calls} == {u.key for u in batch},
         "every object is uploaded exactly once",
@@ -216,10 +230,22 @@ with tempfile.TemporaryDirectory() as tmp:
     session = FakeSession(fail_key="p/f7.json")
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
-        failed = upload_all(session, "a-bucket", batch)
+        failed = upload_all(session, "a-bucket", batch, PROXY_CONFIG)
     check(failed == ["p/f7.json"], f"the failed key is named, got {failed}")
     check(len(session.calls) == len(batch) - 1, "one failure stops nothing")
     check("p/f7.json" in err.getvalue(), "the failed key goes to stderr")
+
+    # A catalog on ordinary AWS S3 sets no endpoint_url. The publisher must
+    # still work, and must pass None rather than inventing a host.
+    session = FakeSession()
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        failed = upload_all(session, "a-bucket", batch, {})
+    check(failed == [], "no endpoint_url still uploads")
+    check(
+        set(session.endpoints) == {None},
+        "a catalog with no endpoint_url gets a default-endpoint client",
+    )
 
 # --- the AWS session ---------------------------------------------------
 # boto3 is not a dependency of this template, so this part is skipped when
