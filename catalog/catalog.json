@@ -2,16 +2,36 @@
   "type": "Catalog",
   "stac_version": "1.1.0",
   "stac_extensions": [
-    "https://schemas.portolan-sdi.org/portolan/v0.1.1/schema.json"
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
-  "id": "example-catalog",
-  "title": "Example Catalog",
-  "description": "TODO(setup): one or two sentences saying what this catalog holds, who produced the data, and who it is for. A person and an agent both read this first.",
+  "id": "sentinel-2-quarterly-cloudless-mosaics",
+  "title": "Sentinel-2 Quarterly Cloudless Mosaics",
+  "description": "A full mirror of the [Copernicus Sentinel-2 Global Mosaics](https://documentation.dataspace.copernicus.eu/Data/Others/Sentinel2_Mosaic_Algorithm.html) (product `S2MSI_L3__MCQ`): quarterly cloud-free composites of the Sentinel-2 archive at 10 m, 36 quarters from 2017 Q1 through 2025 Q4. Every mosaic pixel is the 25th percentile of that quarter's cloud-masked Level-2A surface reflectance observations for that pixel, which suppresses residual haze and misclassified bright cloud instead of averaging it in. Four bands publish: blue (B02), green (B03), red (B04) and wide near-infrared (B08), each a single-band Cloud-Optimized GeoTIFF that an HTTP client can read a window out of without a key or an account. Upstream the same product sits behind the [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu) sign-in; this copy is anonymous and open. The `mosaics` collection holds the imagery and its item index. The `coverage` collection holds per-tile, per-quarter statistics and tile footprints, so a client can plan a query before running it. The European Space Agency produces the mosaics; [Taylor Geospatial Engine](https://tgengine.org) hosts this mirror. Read the [agent guide](AGENTS.md) before you query it.",
+  "updated": "2026-09-28T10:31:47Z",
   "links": [
     {
       "rel": "root",
       "href": "./catalog.json",
-      "type": "application/json"
+      "type": "application/json",
+      "title": "Sentinel-2 Quarterly Cloudless Mosaics"
+    },
+    {
+      "rel": "self",
+      "href": "https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/catalog.json",
+      "type": "application/json",
+      "title": "Sentinel-2 Quarterly Cloudless Mosaics"
+    },
+    {
+      "rel": "child",
+      "href": "./mosaics/collection.json",
+      "type": "application/json",
+      "title": "Quarterly cloudless mosaic tiles"
+    },
+    {
+      "rel": "child",
+      "href": "./coverage/collection.json",
+      "type": "application/json",
+      "title": "Tile footprints and per-quarter coverage"
     },
     {
       "rel": "describedby",
@@ -27,12 +47,12 @@
     },
     {
       "rel": "vcs",
-      "href": "https://github.com/TODO(setup)",
+      "href": "https://github.com/taylor-geospatial/sentinel-2-quarterly-mosaics",
       "title": "Source repository"
     },
     {
       "rel": "issues",
-      "href": "https://github.com/TODO(setup)/issues",
+      "href": "https://github.com/taylor-geospatial/sentinel-2-quarterly-mosaics/issues",
       "title": "Issue tracker"
     }
   ]

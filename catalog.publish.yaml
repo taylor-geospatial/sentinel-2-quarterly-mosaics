@@ -3,15 +3,14 @@
 # Everything under publish_dir is synced 1:1 to write_prefix. Data files are
 # never placed under publish_dir, so they cannot be published by accident.
 #
-# TODO(setup): replace the three sentinel values below. tools/publish.py
-# refuses to upload while any of them is unchanged.
-
 # The S3 URI uploads are written to. Copy it from your storage provider.
-write_prefix: s3://EXAMPLE-BUCKET/EXAMPLE-PREFIX
+# Source Cooperative serves the tge-labs account out of us-west-2; the bucket
+# name carries the region, and the prefix is the product slug.
+write_prefix: s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
 
 # The public base URL that serves write_prefix. Every href in the catalog is
 # built from this, so it goes in the STAC JSON and write_prefix does not.
-public_base: https://example.invalid/EXAMPLE-PREFIX
+public_base: https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics
 
 region: us-west-2
 

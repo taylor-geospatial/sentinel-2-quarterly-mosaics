@@ -1,36 +1,48 @@
-# Portolan Catalog Template
+# Sentinel-2 Quarterly Cloudless Mosaics
 
-A starting point for a [Portolan](https://www.portolan-sdi.org/) catalog whose
-metadata lives in git. Click **Use this template**, work through
-[SETUP.md](SETUP.md), and you have a repository whose CI validates every change
-before it publishes.
+The [Portolan](https://www.portolan-sdi.org/) catalog for
+[`tge-labs/sentinel-2-quarterly-cloudless-mosaics`](https://source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics)
+on Source Cooperative: a full mirror of the Copernicus Sentinel-2 Global
+Mosaics, 36 quarters from 2017 Q1 through 2025 Q4, 4,070,300 Cloud-Optimized
+GeoTIFFs over 1,017,575 mosaic tiles, 607.5 TB.
+
+This repository holds the catalog metadata and the tools that generate it. The
+imagery is already in the bucket. Nothing here moves 607 TB.
+
+**Start at [`catalog/README.md`](catalog/README.md)** for what the data is and
+how to read it, or [`catalog/AGENTS.md`](catalog/AGENTS.md) if you are an agent
+about to query it.
 
 **`catalog/` is the published catalog.** Everything in it is published.
 Everything outside it never is. That boundary is the whole publish contract,
 and `tools/publish.py` has no flag or config key that widens it.
 
-## Three kinds of file
-
-| Kind | Where | Example |
-|---|---|---|
-| Tracked and published | inside `catalog/` | STAC JSON, `README.md`, `AGENTS.md`, thumbnails, logos |
-| Tracked, never published | outside `catalog/` | `tools/`, `tests/`, `docs/`, this README, `catalog.publish.yaml` |
-| Neither | gitignored | GeoParquet, COGs, PMTiles, credentials |
-
-The data lives in object storage next to the published metadata. The
-repository references it by URL and never stores it.
-
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `catalog/` | The published tree, synced 1:1 to object storage |
+| `catalog/` | The published tree, synced 1:1 to the bucket prefix |
+| `catalog/mosaics/` | The imagery collection: bands, item index, per-quarter partitions |
+| `catalog/coverage/` | Tile footprints and per-tile, per-quarter statistics |
 | `catalog.publish.yaml` | Where it publishes, and under what public URL |
-| `tools/publish.py` | The sync. Dry run by default |
+| `tools/publish.py` | The metadata sync. Dry run by default |
 | `tools/upload_data.py` | The data upload. Dry run by default |
 | `tests/` | The gates CI runs on every pull request |
 | `docs/conformance.md` | Any validator finding this catalog accepts, and why |
-| `SETUP.md` | The checklist. Delete it when you are done |
+
+## What publishes where
+
+The catalog publishes into the existing product root, beside the imagery it
+describes:
+
+```
+s3://us-west-2.opendata.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+```
+
+The `{year}/{Qn}/{tile}/` imagery directories, `manifest/`, `_status/` and
+`_benchmarks/` were written by the transfer job and are not touched by this
+repository. `tools/publish.py` never deletes, so it cannot disturb them.
 
 ## Publish
 
@@ -42,51 +54,31 @@ python3 tools/publish.py --confirm  # upload; needs AWS credentials
 It never deletes. Removing a file from `catalog/` does not unpublish it, so
 delete the object yourself if that is what you meant.
 
-## Upload the data
-
-The data is too large for git, so it lives outside `catalog/`.
-`tools/upload_data.py` carries it to the same bucket prefix. Set `data_dir` in
-`catalog.publish.yaml` to the directory that holds it.
-
-```bash
-python3 tools/upload_data.py            # dry run: what would change
-python3 tools/upload_data.py --confirm  # upload; needs AWS credentials
-```
-
-Both scripts share one set of rules. `upload_data.py` imports the sentinel
-guard, the content types, the change detection, and the upload pool from
-`publish.py`. It changes one thing, the directory it walks. Only the suffixes
-in its allow-list upload, so staged scratch files stay out of the bucket.
-
 ## Test
 
 ```bash
-python3 tests/run_all.py
+python3 -m venv .venv
+.venv/bin/pip install 'rashid>=0.1.8,<0.2.0' stac-check
+PATH="$PWD/.venv/bin:$PATH" python3 tests/run_all.py
 ```
 
 | Gate | What it checks |
 |---|---|
-| `test_setup.py` | Template placeholders are all edited, or all untouched |
 | `test_links.py` | Every relative link and asset href resolves |
 | `test_publish.py` | Nothing outside `catalog/` can be uploaded |
 | `test_upload_data.py` | Only staged files with an allowed suffix upload |
 | `test_stac_valid.py` | Valid STAC 1.1.0, via `stac-check` |
 | `test_conformance.py` | Portolan conformance, via `rashid` |
 
-The two validator gates skip when their tools are absent, so a clean checkout
-runs with no setup. CI installs both and enforces them.
+`rashid` 0.1.8 is the floor, because it is the first version that accepts the
+absolute root `self` link that Portolan schema v0.2.0 recommends. CI installs
+the same range the gate enforces.
 
-## What this template does not decide
-
-How a published catalog points back at the repository that maintains it. Three
-encodings are in use across real catalogs and none is standardized, so this
-template ships none of them rather than freezing one in by default. The
-tradeoffs are in
-[portolan-spec#145](https://github.com/portolan-sdi/portolan-spec/issues/145)
-and in the
-[git-backed catalogs guidance](https://github.com/portolan-sdi/portolan-spec/blob/main/specs/best-practices/git-backed-catalogs.md).
+Leave `CI_LIGHT` unset locally so the full link check runs. CI sets it, because
+a fresh checkout has the metadata and not the 607 TB the asset hrefs point at.
 
 ## License
 
-Apache-2.0, covering the tooling in this repository. The data you catalog
-carries its own license, which belongs in `catalog/README.md`.
+Apache-2.0, covering the tooling in this repository. The imagery carries the
+[Copernicus Sentinel Data Legal Notice](https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice),
+which `catalog/README.md` states in full.
