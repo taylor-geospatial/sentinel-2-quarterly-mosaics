@@ -75,6 +75,20 @@ function writeHash(map, quarter, subtile) {
 
 // --- Map -------------------------------------------------------------------
 
+// Past atan(3) — 71.565 degrees — a point query into MapLibre returns nothing:
+// the ray through the screen point no longer meets the ground plane inside the
+// camera frustum, so `queryRenderedFeatures([x, y])` comes back empty however
+// much of the map is on screen. Measured here: at pitch 71.5 every probe point
+// over the MGRS grid hits, at 71.6 not one does, and the threshold does not
+// move with zoom.
+//
+// Clicking a cell is how you get from the map to the data, so a camera you can
+// reach and cannot click is worse than a camera you cannot reach. The ceiling
+// is therefore the limit itself, less a rounding margin — which still looks
+// out at the horizon, and is within half a degree of the pitch these views
+// were composed at.
+const MAX_PITCH = 71.5;
+
 const initial = readHash();
 
 addProtocol("pmtiles", new Protocol().tile);
@@ -110,7 +124,7 @@ const map = new MapLibreMap({
   zoom: initial.zoom ?? 1.4,
   bearing: initial.bearing ?? 0,
   pitch: initial.pitch ?? 0,
-  maxPitch: 80,
+  maxPitch: MAX_PITCH,
   hash: false,
   attributionControl: { compact: false },
 });
