@@ -269,6 +269,65 @@ function tileExtent(z, x, y) {
   return { west, north, east: west + size, south: north - size, size };
 }
 
+// --- The filmstrip's tile cache --------------------------------------------
+
+// Decoded tiles, kept so the filmstrip can repaint after a camera move
+// without a network read. A move wipes the frames, and MapLibre re-requests
+// nothing it already holds, so without this the frames stay blank exactly
+// when everything is loaded. MapLibre owns the bitmaps it is handed and may
+// consume them, so the cache holds its own clones — ~60 MB at the cap, the
+// oldest closed and dropped first. Purely passive: a repaint paints what is
+// here and fetches nothing.
+const STRIP_CACHE_MAX = 240;
+const stripCache = new Map();   // "quarter/z/x/y" -> ImageBitmap (our clone)
+
+async function rememberTile(quarter, z, x, y, bitmap) {
+  if (bitmap.width > 512 || bitmap.height > 512) return;
+  let clone;
+  try {
+    clone = await createImageBitmap(bitmap);
+  } catch {
+    return;
+  }
+  const key = `${quarter}/${z}/${x}/${y}`;
+  stripCache.get(key)?.close();
+  stripCache.delete(key);
+  stripCache.set(key, clone);
+  if (stripCache.size > STRIP_CACHE_MAX) {
+    const [oldest, old] = stripCache.entries().next().value;
+    stripCache.delete(oldest);
+    old.close();
+  }
+}
+
+// Every cached tile of `quarter` that intersects `extent`, at the finest
+// zoom that has any. Synchronous and network-free; touching an entry
+// marks it recently used.
+export function cachedTiles(quarter, extent, maxZoom) {
+  for (let z = Math.max(0, Math.min(maxZoom, 22)); z >= 0; z--) {
+    const size = (2 * WORLD) / 2 ** z;
+    const x0 = Math.max(0, Math.floor((extent.west + WORLD) / size));
+    const x1 = Math.min(2 ** z - 1, Math.floor((extent.east + WORLD) / size));
+    const y0 = Math.max(0, Math.floor((WORLD - extent.north) / size));
+    const y1 = Math.min(2 ** z - 1, Math.floor((WORLD - extent.south) / size));
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) continue;
+    const hits = [];
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const key = `${quarter}/${z}/${tx}/${ty}`;
+        const bitmap = stripCache.get(key);
+        if (bitmap) {
+          stripCache.delete(key);
+          stripCache.set(key, bitmap);
+          hits.push({ bitmap, ext: tileExtent(z, tx, ty) });
+        }
+      }
+    }
+    if (hits.length) return hits;
+  }
+  return [];
+}
+
 // One map tile of one quarter, as an ImageBitmap.
 //
 // `onTile` is handed the decoded bitmap and its geographic extent before the
@@ -346,6 +405,7 @@ export async function readTile(quarter, z, x, y, signal, onTile) {
     out = await createImageBitmap(canvas);
   }
 
+  await rememberTile(quarter, z, x, y, out);
   onTile?.(quarter, out, ext, z);
   return out;
 }

@@ -14,6 +14,7 @@
 // shows the centre of the viewport cropped to the frame's shape, which is the
 // part of the screen a person is looking at anyway.
 import { QUARTERS, YEARS, yearOf, quarterNum, monthsOf } from "./catalog.js";
+import { cachedTiles } from "./mosaic.js";
 
 const WORLD = 20037508.342789244;
 const DPR = Math.min(2, globalThis.devicePixelRatio || 1);
@@ -212,28 +213,51 @@ export class Filmstrip extends EventTarget {
   // One decoded map tile, painted into its quarter's frame. `ext` is the
   // tile's mercator box, straight from the tile index — no reprojection, since
   // the frames are mercator too.
+  //
+  // Only the intersection is drawn, cropped at the source. At high zoom a
+  // tile is far larger than the frame's box, and drawing the whole bitmap
+  // scaled asks the canvas for a destination thousands of frame-widths
+  // wide, which some engines silently refuse. Cropping keeps every number
+  // small. Sub-pixel crops are fine both ways: at low zoom a whole tile is
+  // under a pixel of frame, at high zoom a frame is under a pixel of tile.
   paintTile(quarter, bitmap, ext) {
     const f = this.frames.get(quarter);
     if (!f || !this.extent) return;
     const { west, east, south, north } = this.extent;
-    if (ext.east <= west || ext.west >= east || ext.north <= south || ext.south >= north) return;
+    const ix0 = Math.max(ext.west, west), ix1 = Math.min(ext.east, east);
+    const iy0 = Math.max(ext.south, south), iy1 = Math.min(ext.north, north);
+    if (ix1 <= ix0 || iy1 <= iy0) return;
 
     const ctx = this._ctxFor(f);
     const kx = f.canvas.width / (east - west);
     const ky = f.canvas.height / (north - south);
-    const dx = (ext.west - west) * kx;
-    const dy = (north - ext.north) * ky;
-    const dw = (ext.east - ext.west) * kx;
-    const dh = (ext.north - ext.south) * ky;
-    // Sub-pixel tiles are common at low zoom; drawing them anyway is what
-    // makes a globe-scale frame resolve into a recognisable continent.
+    const sx = ((ix0 - ext.west) / (ext.east - ext.west)) * bitmap.width;
+    const sy = ((ext.north - iy1) / (ext.north - ext.south)) * bitmap.height;
+    const sw = ((ix1 - ix0) / (ext.east - ext.west)) * bitmap.width;
+    const sh = ((iy1 - iy0) / (ext.north - ext.south)) * bitmap.height;
     try {
-      ctx.drawImage(bitmap, dx, dy, Math.max(dw, 0.5), Math.max(dh, 0.5));
+      ctx.drawImage(bitmap, sx, sy, Math.max(sw, 0.01), Math.max(sh, 0.01),
+        (ix0 - west) * kx, (north - iy1) * ky,
+        Math.max((ix1 - ix0) * kx, 0.5), Math.max((iy1 - iy0) * ky, 0.5));
     } catch {
       return;   // a closed bitmap, if MapLibre got there first
     }
     f.painted += 1;
     if (f.painted === 1) f.el.classList.add("has-image");
+  }
+
+  // Repaint every frame from the mosaic tile cache. A camera move wipes
+  // the frames, and tiles that are already decoded never arrive again, so
+  // this is what brings a loaded strip back. Network-free by construction;
+  // arrival painting covers whatever is not cached yet.
+  repaintFromCache(maxZoom) {
+    if (!this.extent) return;
+    for (const [quarter, state] of this.stack.availability) {
+      if (state !== "present") continue;
+      for (const { bitmap, ext } of cachedTiles(quarter, this.extent, maxZoom)) {
+        this.paintTile(quarter, bitmap, ext);
+      }
+    }
   }
 
   // --- transport -----------------------------------------------------------

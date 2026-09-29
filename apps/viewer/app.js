@@ -369,9 +369,11 @@ map.on("style.load", async () => {
 });
 
 // A camera move invalidates every frame, since they all depict the old
-// viewport. Wipe them and let the stack repaint as tiles arrive.
+// viewport. Wipe them, repaint at once from the tiles already decoded,
+// and let arrivals fill in the rest.
 map.on("moveend", () => {
   strip.setExtent(map.getBounds());
+  strip.repaintFromCache(Math.round(map.getZoom()));
   updateHighlight();
   scenes.refresh();
   updatePresetState();
