@@ -44,6 +44,17 @@ const MAX_CELLS = 2;
 // arrives a beat later on the quarter you actually stopped at.
 const NEIGHBOUR_QUARTERS = 0;
 
+// Retention is not prefetch. A quarter that stopped being current keeps its
+// layers at zero opacity, so switching back to it cuts straight to sharp
+// pixels instead of refetching and rewarping — the decoded tiles are a few
+// megabytes of GPU memory per (quarter, cell). MAX_LIVE caps the total;
+// past it the least-recently-shown layers go first, never the current
+// quarter's. A camera move drops every retained layer (see the movestart
+// hook), because an invisible layer still loads tiles when the viewport
+// changes, and multiplying a pan's fetches is the one cost retention must
+// not have.
+const MAX_LIVE = 12;
+
 const sourceId = (q, s) => `scene-${q}-${s}`;
 const layerId = (q, s) => `scene-layer-${q}-${s}`;
 
@@ -55,6 +66,7 @@ export class SceneTier {
     this.preset = "natural";
     this.live = new Map();        // "quarter/subtile" -> {quarter, subtile, bounds}
     registerSceneProtocol(addProtocol, (id) => PRESETS[id] || PRESETS.natural);
+    map.on("movestart", () => this._dropRetained());
   }
 
   get active() {
@@ -66,9 +78,10 @@ export class SceneTier {
     this.preset = id;
     // The preset is part of the tile URL, so every live cell needs a new
     // source. Its tiles come back out of scene.js's plane cache without a
-    // network read.
+    // network read — which is why this clear keeps the planes: forgetting
+    // them here made every preset switch refetch what it already had.
     const was = [...this.live.values()];
-    this.clear();
+    this.clear({ forget: false });
     for (const { quarter, subtile, bounds } of was) this._add(quarter, subtile, bounds);
   }
 
@@ -133,17 +146,31 @@ export class SceneTier {
     if (!this.active) { this.clear(); return; }
     const cells = this.visibleCells();
     if (!cells.length) { this.clear(); return; }
+    const visible = new Set(cells.map((c) => c.subtile));
     const quarters = this.quartersWanted();
 
-    const keep = new Set();
+    const wanted = new Set();
     for (const q of quarters) {
       for (const { subtile, bounds } of cells) {
-        keep.add(`${q}/${subtile}`);
+        wanted.add(`${q}/${subtile}`);
         this._add(q, subtile, bounds);
       }
     }
+    // A cell that left the viewport goes at once. A quarter that merely
+    // stopped being current is retained at zero opacity with its tiles,
+    // so scrubbing back to it is a cut rather than a refetch.
     for (const key of [...this.live.keys()]) {
-      if (!keep.has(key)) this._remove(key);
+      if (!visible.has(this.live.get(key).subtile)) this._remove(key);
+    }
+    // LRU: the wanted layers move to newest, and eviction takes the
+    // oldest retained layer first. `wanted` keys are never evicted.
+    for (const key of wanted) {
+      const entry = this.live.get(key);
+      if (entry) { this.live.delete(key); this.live.set(key, entry); }
+    }
+    const evictable = [...this.live.keys()].filter((k) => !wanted.has(k));
+    while (this.live.size > MAX_LIVE && evictable.length) {
+      this._remove(evictable.shift());
     }
     this.setCurrentQuarter(this.stack.current);
   }
@@ -183,7 +210,10 @@ export class SceneTier {
     this.live.set(key, { quarter, subtile, bounds });
   }
 
-  _remove(key) {
+  // `forget` also drops scene.js's warped planes and open COG handles.
+  // False keeps them, for a removal that re-adds the same cell at once
+  // (a preset switch) and wants its repaint from memory.
+  _remove(key, { forget = true } = {}) {
     const entry = this.live.get(key);
     if (!entry) return;
     const { quarter, subtile } = entry;
@@ -194,11 +224,20 @@ export class SceneTier {
       this.map.removeSource(sourceId(quarter, subtile));
     }
     this.live.delete(key);
-    forgetScene(quarter, subtile);
+    if (forget) forgetScene(quarter, subtile);
   }
 
-  clear() {
-    for (const key of [...this.live.keys()]) this._remove(key);
+  clear({ forget = true } = {}) {
+    for (const key of [...this.live.keys()]) this._remove(key, { forget });
+  }
+
+  // An invisible retained layer still loads tiles when the viewport
+  // changes, so a camera move drops everything but the current quarter.
+  // Retention serves the standing-still scrub, and only that.
+  _dropRetained() {
+    for (const key of [...this.live.keys()]) {
+      if (this.live.get(key).quarter !== this.stack.current) this._remove(key);
+    }
   }
 }
 

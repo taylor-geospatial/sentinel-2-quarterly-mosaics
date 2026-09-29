@@ -86,8 +86,11 @@ export class TimeStack extends EventTarget {
     await this._admit(quarter);
     for (const q of this.resident) {
       const on = q === quarter;
+      // Always a hard cut, never a crossfade. Two quarters blended at
+      // half opacity for even 140 ms read as a blur, not a transition —
+      // these are film frames, and a resident quarter can cut cleanly.
       this.map.setPaintProperty(layerId(q), "raster-opacity-transition",
-        { duration: instant ? 0 : 140, delay: 0 });
+        { duration: 0, delay: 0 });
       this.map.setPaintProperty(layerId(q), "raster-opacity", on ? 1 : 0);
     }
     if (previous !== quarter) {
