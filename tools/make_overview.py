@@ -315,8 +315,8 @@ def warp_zone(args: tuple[int, Path, Path, float]) -> tuple[int, float, str]:
 
 
 def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
-          oversample: float, jobs: int, bbox, quality: int,
-          keep_scratch: bool, webp: bool, only: list[str] | None = None,
+          oversample: float, jobs: int, bbox,
+          keep_scratch: bool, only: list[str] | None = None,
           stage_jobs: int = 0) -> Path:
     public_base = load_config()["public_base"].rstrip("/")
     res = resolution(zoom)
@@ -369,9 +369,7 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          *[str(p) for _, _, p, _ in work_items]], "gdalbuildvrt mosaic")
 
     # Nodata did its job in the mosaic; from here the transparency has to
-    # be an alpha band. WebP is lossy, so a pixel written as exactly 0
-    # can come back as 1 and stop matching a nodata value, which would
-    # fringe every coastline. `-b mask` turns the nodata mask into a real
+    # be an alpha band. `-b mask` turns the nodata mask into a real
     # fourth band before the compression touches anything. The COG
     # driver's own ADD_ALPHA does not help here: it only fires when the
     # driver reprojects, and by this point the mosaic is already on the
@@ -381,15 +379,20 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          "-b", "mask", "-colorinterp", "red,green,blue,alpha",
          str(mosaic), str(rgba)], "gdal_translate alpha")
 
+    # DEFLATE, not WebP or JPEG, and the choice is about the readers.
+    # Every GDAL build, every geotiff.js, and every browser COG renderer
+    # decodes DEFLATE. WebP-in-TIFF needs a GDAL built with libwebp and a
+    # client that hands tile bytes to a browser image decoder, and a
+    # reader without either shows an empty layer with no error. JPEG
+    # cannot carry the alpha band. DEFLATE is lossless and larger, and
+    # that is the accepted cost of a browse layer every client can read.
     final = part / "overview.tif"
     tmp = final.with_name(f".{final.name}.tmp")
     t0 = time.monotonic()
-    compress = "WEBP" if webp else "JPEG"
     run(["gdal_translate", "-q", "-of", "COG", str(rgba), str(tmp),
-         "-co", f"COMPRESS={compress}",
-         "-co", f"OVERVIEW_COMPRESS={compress}",
-         "-co", f"QUALITY={quality}",
-         "-co", f"OVERVIEW_QUALITY={quality}",
+         "-co", "COMPRESS=DEFLATE",
+         "-co", "OVERVIEW_COMPRESS=DEFLATE",
+         "-co", "PREDICTOR=YES",
          "-co", "TILING_SCHEME=GoogleMapsCompatible",
          "-co", f"ZOOM_LEVEL={zoom}",
          "-co", "SPARSE_OK=TRUE",
@@ -398,7 +401,7 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          "-co", "BIGTIFF=IF_SAFER",
          "-co", "NUM_THREADS=ALL_CPUS"], "gdal_translate COG")
     os.replace(tmp, final)
-    say(f"{year} {quarter}: {final} written, {compress}, "
+    say(f"{year} {quarter}: {final} written, DEFLATE, "
         f"{final.stat().st_size / 1e6:,.1f} MB, "
         f"{time.monotonic() - t0:,.1f}s")
     if not keep_scratch:
@@ -448,8 +451,6 @@ def main(argv: list[str] | None = None) -> int:
                                    "only the tiles that meet it")
     ap.add_argument("--tiles", help="comma-separated tile ids to build, "
                                     "instead of reading the staging file")
-    ap.add_argument("--quality", type=int, default=80,
-                    help="WebP/JPEG quality, 1-100 (default 80)")
     ap.add_argument("--thumbnail", action="store_true",
                     help="write thumbnail.webp from the overview COG")
     ap.add_argument("--thumbnail-width", type=int, default=1024)
@@ -460,17 +461,15 @@ def main(argv: list[str] | None = None) -> int:
     caps = require_gdal()
     webp = caps["webp"]
     if not webp:
-        say("this GDAL has no WEBP driver; falling back to JPEG. The "
-            "published overviews must be WebP, so build them where WebP "
-            "is available (tools/rails/environment.yml pins a GDAL that "
-            "has it).")
+        say("this GDAL has no WEBP driver; the thumbnail falls back to "
+            "JPEG. The overview COG is DEFLATE and does not need it.")
     part = Path(a.out) / schema.COLLECTION / f"quarter={a.year}.{a.quarter}"
     bbox = tuple(float(v) for v in a.bbox.split(",")) if a.bbox else None
 
     only = [t.strip() for t in a.tiles.split(",")] if a.tiles else None
     if a.work or only:
         build(a.year, a.quarter, Path(a.work or a.out), Path(a.out), a.zoom,
-              a.oversample, a.jobs, bbox, a.quality, a.keep_scratch, webp,
+              a.oversample, a.jobs, bbox, a.keep_scratch,
               only, a.stage_jobs)
     if a.thumbnail:
         thumbnail(part / "overview.tif",

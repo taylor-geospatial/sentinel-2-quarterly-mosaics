@@ -14,15 +14,17 @@
 //      through proj4 from the scene's UTM grid; here source and destination are
 //      the same projection, so there is nothing to resample and nothing to get
 //      subtly wrong.
-//   2. No pixel work at all. geotiff.js can decode these rasters — it does
-//      register a WebP decoder, which hands the block to the browser and reads
-//      the pixels back off a canvas — but there is no reason to go round that
-//      loop. A COG block of WebP-compressed pixels *is* a complete WebP image,
-//      so the block's bytes can go straight to `createImageBitmap`, and from
-//      there straight to MapLibre, which accepts an ImageBitmap for an image
-//      resource and uploads it as a texture. Nothing is decoded to an array,
-//      copied, or re-encoded on the way. geotiff.js is used here only to parse
-//      the IFDs, which is what it is good at.
+//   2. Almost no pixel work. The blocks are DEFLATE with the horizontal
+//      predictor — chosen over WebP because every COG reader everywhere
+//      decodes DEFLATE, where WebP-in-TIFF needs a GDAL built with libwebp
+//      and shows an empty layer without one. A block inflates through the
+//      browser's own DecompressionStream, the predictor is undone in one
+//      additive pass, and the bytes are already ImageData's RGBA layout, so
+//      they go straight to `createImageBitmap` and from there to MapLibre as
+//      a texture. geotiff.js is used here only to parse the IFDs, which is
+//      what it is good at. (A WebP-compressed overview still renders — its
+//      blocks are complete WebP images and go to `createImageBitmap`
+//      directly — so older builds of the layer keep working.)
 //   3. The same byte window every quarter. Because the grid is shared across
 //      all 36 files, the tile a viewport needs from 2017 Q1 sits at the same
 //      place in the pyramid as the one it needs from 2025 Q4. Prefetching the
@@ -96,8 +98,14 @@ export function openOverview(quarter) {
       const bounds = [toLng(Math.min(ox, x1)), toLat(Math.min(oy, y1)),
         toLng(Math.max(ox, x1)), toLat(Math.max(oy, y1))];
 
+      // The compression and predictor decide how blockImage() turns a
+      // block's bytes into pixels; both are constant across the file.
+      const compression = Number(await base.fileDirectory.loadValue("Compression"));
+      const predictor = base.fileDirectory.hasTag("Predictor")
+        ? Number(await base.fileDirectory.loadValue("Predictor")) : 1;
+
       return { href, ox, oy, rx, ry, w, h, levels, baseZoom, bounds,
-        samples: base.getSamplesPerPixel() };
+        compression, predictor, samples: base.getSamplesPerPixel() };
     })());
     opened.get(quarter).catch(() => opened.delete(quarter));
   }
@@ -122,6 +130,50 @@ async function blockBytes(level, bx, by, signal) {
 // The opened COG knows its href; carrying it on the level saves
 // reaching into geotiff.js internals for every block.
 const withHref = (cog, level) => ({ ...level, href: cog.href });
+
+// --- Block decode ----------------------------------------------------------
+
+const DEFLATE = new Set([8, 32946]);      // Adobe deflate, and the older code
+const WEBP = 50001;
+const HORIZONTAL_PREDICTOR = 2;
+
+async function inflate(buf) {
+  const stream = new Blob([buf]).stream()
+    .pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Undo TIFF predictor 2: each stored byte is the difference from the same
+// sample one pixel to the left, so a row is rebuilt by one additive pass.
+function unpredict(data, width, height, samples) {
+  const rowBytes = width * samples;
+  for (let y = 0; y < height; y++) {
+    const row = y * rowBytes;
+    for (let i = samples; i < rowBytes; i++) {
+      data[row + i] = (data[row + i] + data[row + i - samples]) & 255;
+    }
+  }
+}
+
+// One block's bytes to an ImageBitmap. DEFLATE inflates to bytes already in
+// ImageData's RGBA layout; a WebP block is a complete WebP image and decodes
+// through the browser directly. TIFF blocks are always padded to full size,
+// so the dimensions are the block's, never the image edge's.
+async function blockImage(cog, level, buf) {
+  if (cog.compression === WEBP) {
+    return createImageBitmap(new Blob([buf], { type: "image/webp" }));
+  }
+  if (!DEFLATE.has(cog.compression)) {
+    throw new Error(`overview compression ${cog.compression} is not handled`);
+  }
+  const raw = await inflate(buf);
+  if (cog.predictor === HORIZONTAL_PREDICTOR) {
+    unpredict(raw, level.bw, level.bh, cog.samples);
+  }
+  const rgba = new Uint8ClampedArray(
+    raw.buffer, raw.byteOffset, level.bw * level.bh * cog.samples);
+  return createImageBitmap(new ImageData(rgba, level.bw, level.bh));
+}
 
 // --- Tiles -----------------------------------------------------------------
 
@@ -184,9 +236,7 @@ export async function readTile(quarter, z, x, y, signal, onTile) {
   const blocks = await Promise.all(jobs.map(async ([bx, by]) => {
     const buf = await blockBytes(lvl, bx, by, signal).catch(() => null);
     if (!buf || !buf.byteLength) return null;
-    // A COG block of WebP-compressed pixels is a complete WebP image. The
-    // browser decodes it; no JavaScript codec is involved.
-    const bitmap = await createImageBitmap(new Blob([buf], { type: "image/webp" })).catch(() => null);
+    const bitmap = await blockImage(cog, lvl, buf).catch(() => null);
     return bitmap ? { bx, by, bitmap } : null;
   }));
   const got = blocks.filter(Boolean);

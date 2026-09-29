@@ -15,15 +15,14 @@ micromamba create -y -f tools/rails/environment.yml \
     -p /u/cholmes/micromamba/envs/s2mosaics
 ```
 
-Check the one thing that fails silently:
+The overview COGs are DEFLATE, which every GDAL build writes and every
+client reads. The WEBP driver is only needed for the thumbnails;
+`make_overview.py` falls back to a JPEG thumbnail with a warning when
+the driver is missing. Check it with:
 
 ```bash
 /u/cholmes/micromamba/envs/s2mosaics/bin/gdalinfo --formats | grep WEBP
 ```
-
-The published browse overviews are WebP. `make_overview.py` falls back to
-JPEG with a warning when the driver is missing, which would put the wrong
-bytes in the catalog rather than stopping.
 
 ## Credentials: the Source Cooperative data proxy
 
