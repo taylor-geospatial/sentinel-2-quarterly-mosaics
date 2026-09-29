@@ -51,7 +51,7 @@
       "quarter": "2024.Q2"
     },
     "table:row_count": 28272,
-    "updated": "2026-09-29T14:57:01Z"
+    "updated": "2026-09-29T20:18:42Z"
   },
   "assets": {
     "data": {
@@ -74,10 +74,10 @@
         "overview",
         "visual"
       ],
-      "description": "The quarter's global browse layer: RGB plus alpha, WebP lossy, EPSG:3857 at zoom 9 (305.75 m per pixel), 256-pixel internal blocks aligned to the Web Mercator tile grid, with a full overview pyramid. Composited from the published B04, B03 and B02 COGs, stretched 0..2500 reflectance units to 0..255 with exponent 0.55. The alpha band is 0 where the quarter has no valid observation.",
+      "description": "The quarter's global browse layer: RGB, JPEG quality 85 with an internal transparency mask, EPSG:3857 at zoom 9 (305.75 m per pixel), 256-pixel internal blocks aligned to the Web Mercator tile grid, with a full overview pyramid. Composited from the published B04, B03 and B02 COGs, stretched 0..2500 reflectance units to 0..255 with exponent 0.55. The mask is 0 where the quarter has no valid observation; a reader that ignores masks shows those pixels black.",
       "proj:code": "EPSG:3857",
-      "file:size": 700276216,
-      "file:checksum": "12201a84b261b3da1cb1fd5d1ff1e8b25fbbcf4065acd7c12456c1e93c2c654acce9"
+      "file:size": 1256445494,
+      "file:checksum": "1220471fd255d6fe7fc1d8c9ffc369e803356a132411e1ee633d3bedbff6c21dedc0"
     },
     "thumbnail": {
       "href": "./thumbnail.webp",
@@ -86,8 +86,8 @@
       "roles": [
         "thumbnail"
       ],
-      "file:size": 81822,
-      "file:checksum": "1220058001ed5c8de7087b1f577378fab98ceb32a783b2b532cbdbbc2aa6f7592d05"
+      "file:size": 87382,
+      "file:checksum": "122062602b602632caaa6a0f5cfc5fc7c8a046595cd9e60f5b301c012247e1f89af5"
     }
   },
   "links": [
