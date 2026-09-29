@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Upload one quarter's item JSON: tens of thousands of small objects.
 
-    AWS_PROFILE=source-coop python3 tools/rails/upload_items.py \\
+    python3 tools/rails/upload_items.py \\
         --items-dir /u/cholmes/s2-mosaics/work/items --year 2024 --quarter Q2
 
 Each item lands beside the four COGs it describes, at
@@ -39,9 +39,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-from publish import load_config, split_s3_uri  # noqa: E402
+from publish import load_config, path_style, split_s3_uri, to_direct  # noqa: E402
 
-DEFAULT_PROFILE = "source-coop"
+# The shared uploader identity: long-lived keys that write the tge-labs
+# prefix on the direct S3 bucket. See tools/rails/upload.py for why the
+# profile and the addressing move together.
+DEFAULT_PROFILE = "source-coop-uploader"
 DEFAULT_WORKERS = 32
 CONTENT_TYPE = "application/geo+json"
 PROGRESS_EVERY = 2_000
@@ -70,21 +73,21 @@ def collect(items_dir: Path, year: int, quarter: str, prefix: str,
     return out
 
 
-def _client(session, endpoint: str | None):
+def _client(session, endpoint: str | None, use_path_style: bool):
     """One boto3 client per worker thread, all from **one** Session.
 
     A client is safe to call from many threads but its connection pool is
     not worth sharing across 32 of them, so each worker gets its own. The
-    Session, though, is deliberately shared: with Source Cooperative's
-    `credential_process`, building a Session per thread would run the
-    `source-coop` binary once per thread and give each worker its own
-    credential cache to expire and refresh independently. One Session
-    resolves the credentials once and every client reads them from it.
-    Creating clients from a Session is not itself thread-safe, so a lock
-    covers only that.
+    Session, though, is deliberately shared: a `credential_process`
+    profile would otherwise run its binary once per thread and give each
+    worker its own credential cache to expire and refresh independently.
+    One Session resolves the credentials once and every client reads them
+    from it. Creating clients from a Session is not itself thread-safe,
+    so a lock covers only that.
 
-    `endpoint` is Source Cooperative's data proxy. Its credentials are
-    proxy STS tokens that are valid against nothing else."""
+    `endpoint` names the data proxy in the proxy form and is empty in
+    the direct form, whose dotted bucket name needs path-style
+    addressing."""
     existing = getattr(_local, "client", None)
     if existing is not None:
         return existing
@@ -97,9 +100,11 @@ def _client(session, endpoint: str | None):
         # credentials kept working from the aws CLI. Whatever that is, a
         # run of 28,272 objects will meet it, and the default of three
         # legacy attempts will not ride it out.
+        cfg = {"retries": {"mode": "adaptive", "max_attempts": 10}}
+        if use_path_style:
+            cfg["s3"] = {"addressing_style": "path"}
         _local.client = session.client(
-            "s3", endpoint_url=endpoint or None,
-            config=Config(retries={"mode": "adaptive", "max_attempts": 10}))
+            "s3", endpoint_url=endpoint or None, config=Config(**cfg))
     return _local.client
 
 
@@ -122,7 +127,7 @@ def put_one(job) -> tuple[str, str, str]:
 
 def _put_one(job) -> tuple[str, str, str]:
     path, key, session, bucket, skip_existing, endpoint = job
-    client = _client(session, endpoint)
+    client = _client(session, endpoint, path_style(bucket))
     if skip_existing:
         try:
             if int(client.head_object(Bucket=bucket, Key=key)["ContentLength"]
@@ -149,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--endpoint",
                     help="S3 endpoint; defaults to endpoint_url in "
                          "catalog.publish.yaml")
+    ap.add_argument("--via", choices=("direct", "proxy"), default="direct",
+                    help="direct (default): the direct S3 bucket; proxy: "
+                         "the data proxy, as the config writes it")
     ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     ap.add_argument("--skip-existing", action="store_true",
                     help="HEAD before each put; for resuming, not for a "
@@ -157,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
 
     config = load_config()
+    if a.via == "direct":
+        config = to_direct(config)
     bucket, prefix = split_s3_uri(config["write_prefix"])
     jobs = collect(Path(a.items_dir), a.year, a.quarter, prefix, a.key_prefix)
     total_bytes = sum(p.stat().st_size for p, _ in jobs)
@@ -175,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     session = boto3.Session(profile_name=a.profile,
                             region_name=config.get("region") or None)
     # Resolve the credentials once, on this thread, so the workers do not
-    # race to run `source-coop creds` at the same moment.
+    # race a `credential_process` profile's binary at the same moment.
     session.get_credentials().get_frozen_credentials()
     t0 = time.monotonic()
     done = {"uploaded": 0, "skipped": 0, "failed": 0}

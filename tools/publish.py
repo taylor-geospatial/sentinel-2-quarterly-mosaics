@@ -117,39 +117,76 @@ def load_config(path: Path = CONFIG) -> dict[str, str]:
     missing = {"write_prefix", "public_base", "publish_dir"} - config.keys()
     if missing:
         sys.exit(f"{path.name} is missing: {', '.join(sorted(missing))}")
-    _refuse_legacy_source_coop(path, config)
+    _check_source_coop_addressing(path, config)
     return config
 
 
-def _refuse_legacy_source_coop(path: Path, config: dict[str, str]) -> None:
-    """Stop on a write_prefix written for Source Cooperative's old layout.
+# Source Cooperative's direct S3 bucket. The direct form writes to it with
+# the account as the first key segment. The proxy form writes through
+# https://data.source.coop with the account as the bucket.
+DIRECT_BUCKET = "us-west-2.opendata.source.coop"
 
-    Before the 0.3 CLI, Source Cooperative was addressed as ordinary AWS
-    S3: bucket ``us-west-2.opendata.source.coop``, account and product as
-    the key prefix. It is now a data proxy, so the bucket is the account
-    and the product is the prefix, reached through ``endpoint_url``.
 
-    The two forms differ only in where the slash falls, and the old one
-    does not fail cleanly against the proxy -- it asks a real AWS endpoint
-    for a bucket these credentials cannot touch, or asks the proxy for a
-    bucket named after a hostname. Either way the message names neither
-    cause. So the old shape is refused here, with the new one spelled out.
-    Translating it silently would be worse: a publish target is not
-    something to guess at.
+def _check_source_coop_addressing(path: Path, config: dict[str, str]) -> None:
+    """Stop on a write target that mixes the two Source Cooperative forms.
+
+    Source Cooperative accepts writes in two addressings, and each one
+    works only with its own credentials. The proxy form goes through
+    ``endpoint_url: https://data.source.coop`` with the account as the
+    bucket. The direct form goes to AWS S3 itself: the bucket is
+    ``us-west-2.opendata.source.coop`` and the account is the first key
+    segment. A mix of the two does not fail cleanly. The proxy reads the
+    direct bucket name as an account that does not exist, and the error
+    names neither cause. So the mix is refused here, and each pure form
+    is accepted.
     """
-    bucket, _, rest = config["write_prefix"].removeprefix("s3://").partition("/")
+    bucket = config["write_prefix"].removeprefix("s3://").partition("/")[0]
     if not bucket.endswith(".opendata.source.coop"):
         return
-    account, _, product = rest.strip("/").partition("/")
+    if "data.source.coop" not in config.get("endpoint_url", ""):
+        return
     sys.exit(
-        f"{path.name}: write_prefix uses Source Cooperative's pre-0.3 "
-        f"addressing.\n"
-        f"  got:      s3://{bucket}/{account}/{product}\n"
-        f"  expected: s3://{account}/{product}\n"
-        f"            endpoint_url: https://data.source.coop\n"
-        "The account is the bucket now, and the proxy endpoint is how the "
-        "credentials reach it. See tools/rails/README.md."
+        f"{path.name}: write_prefix names the direct bucket {bucket} but "
+        f"endpoint_url names the data proxy.\n"
+        "Use one form. Direct: keep the bucket and remove endpoint_url. "
+        "Proxy: make the account the bucket and keep endpoint_url. "
+        "See tools/rails/README.md."
     )
+
+
+def to_direct(config: dict[str, str]) -> dict[str, str]:
+    """The same write target in the direct-S3 form, as a new config.
+
+    The proxy form and the direct form name the same objects. This
+    rewrites ``write_prefix`` onto the direct bucket, moves the account
+    into the key prefix, and drops ``endpoint_url``. A config already in
+    the direct form comes back unchanged. ``public_base`` never changes:
+    the public URLs name the proxy host in both forms.
+    """
+    bucket, prefix = split_s3_uri(config["write_prefix"])
+    if bucket.endswith(".opendata.source.coop"):
+        return dict(config)
+    if "data.source.coop" not in config.get("endpoint_url", ""):
+        sys.exit(
+            "the config is not addressed at Source Cooperative's proxy, "
+            "so there is no direct form to translate it to"
+        )
+    out = dict(config)
+    out["write_prefix"] = f"s3://{DIRECT_BUCKET}/{bucket}" + (
+        f"/{prefix}" if prefix else ""
+    )
+    out.pop("endpoint_url", None)
+    return out
+
+
+def path_style(bucket: str) -> bool:
+    """True when the bucket needs path-style addressing.
+
+    A bucket name that contains a dot cannot be a virtual-host label
+    under https: the certificate wildcard covers one level. The direct
+    Source Cooperative bucket is such a name.
+    """
+    return "." in bucket
 
 
 def split_s3_uri(uri: str) -> tuple[str, str]:
@@ -255,11 +292,12 @@ def aws_session(config: dict[str, str]):
 def s3_client(session, config: dict[str, str]):
     """An S3 client for this catalog's storage.
 
-    ``endpoint_url`` is optional and absent for ordinary AWS S3. Source
-    Cooperative needs it: since the 0.3 CLI its credentials are proxy STS
-    tokens (the access key id begins ``STSPRXY``) that are only valid
-    against ``https://data.source.coop``, and the bucket is the account
-    name with the product as the key prefix.
+    ``endpoint_url`` is optional. The proxy form of Source Cooperative
+    needs it: those credentials are proxy STS tokens (the access key id
+    begins ``STSPRXY``) that are valid only against
+    ``https://data.source.coop``. The direct form and ordinary AWS S3
+    leave it out. A direct-form bucket name contains dots, so that
+    client uses path-style addressing.
 
     botocore does read ``endpoint_url`` from the profile in
     ``~/.aws/config`` on its own -- measured on 1.43.75 -- but it is
@@ -267,8 +305,13 @@ def s3_client(session, config: dict[str, str]):
     host should not depend on a line in a file this repository does not
     own.
     """
+    kwargs = {}
+    bucket = config.get("write_prefix", "").removeprefix("s3://").partition("/")[0]
+    if path_style(bucket):
+        from botocore.config import Config
+        kwargs["config"] = Config(s3={"addressing_style": "path"})
     return session.client(
-        "s3", endpoint_url=config.get("endpoint_url") or None
+        "s3", endpoint_url=config.get("endpoint_url") or None, **kwargs
     )
 
 
@@ -355,9 +398,23 @@ def main() -> int:
         action="store_true",
         help="re-upload everything; skip the remote listing",
     )
+    parser.add_argument(
+        "--via",
+        choices=("config", "direct"),
+        default="config",
+        help="direct: translate a proxy-form target to the direct "
+             "S3 bucket; the keys do not change",
+    )
+    parser.add_argument(
+        "--profile", help="AWS profile; overrides the profile in the config"
+    )
     args = parser.parse_args()
 
     config = load_config()
+    if args.via == "direct":
+        config = to_direct(config)
+    if args.profile:
+        config["profile"] = args.profile
 
     stale = unedited_sentinels(config)
     if stale:

@@ -11,14 +11,14 @@
 # nodes without `module load`. See README.md for how to create it.
 export PATH="${S2M_ENV:-/u/cholmes/micromamba/envs/s2mosaics}/bin:$PATH"
 export AWS_DEFAULT_REGION=us-west-2
-# Source Cooperative is a data proxy since its 0.3 CLI: this profile's
-# credential_process issues proxy STS tokens that are valid only against
-# https://data.source.coop, and the bucket is the account name
-# (`tge-labs`) with the product as the key prefix. The endpoint itself
-# comes from `endpoint_url` in catalog.publish.yaml, which every tool
-# passes explicitly. See README.md for the one headless login.
+# Uploads from rails use the shared uploader identity: long-lived keys
+# that write the tge-labs prefix on the direct S3 bucket
+# (us-west-2.opendata.source.coop). The OAuth proxy profile
+# (`source-coop`) is denied for writes from rails, and the uploader keys
+# are denied by the proxy, so the uploaders pair this profile with the
+# direct addressing (`--via direct`, their default).
 # Building needs no AWS identity at all; every read is anonymous https.
-export AWS_PROFILE="${AWS_PROFILE:-source-coop}"
+export AWS_PROFILE="${AWS_PROFILE:-source-coop-uploader}"
 # DuckDB, GDAL and Python all honour TZ. Every quarter boundary in this
 # catalog is a UTC instant, and a node that thinks otherwise would write
 # start_datetime an hour out.
@@ -56,20 +56,26 @@ export PUBLIC_BASE="${PUBLIC_BASE:-https://data.source.coop/tge-labs/sentinel-2-
 export KEY_PREFIX="${KEY_PREFIX:-}"
 
 # A job that builds for hours and then cannot upload has wasted the
-# allocation, so the credentials are checked before any work starts.
-# `source-coop creds` exits non-zero when the cached refresh token is
-# gone, which is the one failure that needs a human and a browser.
+# allocation, so the identity is checked before any work starts. STS
+# answers with the caller's ARN when the profile's keys are usable, and
+# the ARN goes in the job log so the log names who uploaded.
 check_creds() {
-  if ! command -v source-coop >/dev/null; then
-    echo "source-coop is not on PATH; see tools/rails/README.md" >&2
-    return 1
-  fi
-  if ! source-coop creds >/dev/null 2>&1; then
-    echo "source-coop has no usable cached credentials." >&2
-    echo "Log in again: ssh -L 8400:127.0.0.1:8400 rails, then" >&2
-    echo "  source-coop login --port 8400" >&2
-    return 1
-  fi
+  python3 - <<'PY'
+import os
+import sys
+
+import boto3
+
+profile = os.environ.get("AWS_PROFILE", "source-coop-uploader")
+try:
+    arn = boto3.Session(profile_name=profile).client(
+        "sts").get_caller_identity()["Arn"]
+except Exception as exc:  # noqa: BLE001 - any failure means "not usable"
+    print(f"profile {profile} has no usable credentials: "
+          f"{type(exc).__name__}: {exc}", file=sys.stderr)
+    sys.exit(1)
+print(f"upload identity: {arn} (profile {profile})")
+PY
 }
 
 # Base resolution of the browse overview, as a Web Mercator zoom level.

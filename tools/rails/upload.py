@@ -2,7 +2,7 @@
 """Upload built data files from rails with a named AWS profile, skipping
 what the bucket already holds.
 
-    AWS_PROFILE=source-coop python3 tools/rails/upload.py \\
+    python3 tools/rails/upload.py \\
         --data-dir /u/cholmes/s2-mosaics/publish \\
         mosaics/quarter=2024.Q2/items.parquet \\
         mosaics/quarter=2024.Q2/overview.tif
@@ -38,10 +38,18 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-from publish import Upload, content_type_for, load_config, split_s3_uri  # noqa: E402
+from publish import (  # noqa: E402
+    Upload, content_type_for, load_config, path_style, split_s3_uri, to_direct,
+)
 from upload_data import is_data_publishable  # noqa: E402
 
-DEFAULT_PROFILE = "source-coop"
+# Uploads from rails go to the direct S3 bucket with the shared uploader
+# identity: long-lived keys that write the tge-labs prefix. The OAuth
+# proxy profile (`source-coop`) is denied for writes from rails, and the
+# uploader keys are denied by the proxy, so the profile and the
+# addressing have to move together. `--via proxy` restores the proxy
+# form for a machine where the OAuth profile can write.
+DEFAULT_PROFILE = "source-coop-uploader"
 # `upload_data.py`'s allow-list covers the bulk formats (.parquet,
 # .pmtiles, .tif, .laz). The per-quarter browse images are neither those
 # nor catalog metadata: they are built into $PUBLISH beside the parquet
@@ -119,19 +127,24 @@ def upload_one(client, bucket: str, upload: Upload, force: bool,
     return "uploaded"
 
 
-def make_client(profile: str, region: str | None, endpoint: str | None):
+def make_client(profile: str, region: str | None, endpoint: str | None,
+                bucket: str = ""):
     """The S3 client every upload here goes through.
 
-    Source Cooperative is a data proxy since its 0.3 CLI: the credentials
-    are proxy STS tokens valid only against `endpoint_url`, the bucket is
-    the account (`tge-labs`) and the product is the key prefix. botocore
-    picks `endpoint_url` up from the profile by itself, but it is passed
-    explicitly so that where the bytes land does not depend on a line in
-    somebody's `~/.aws/config`.
+    The endpoint is passed explicitly so that where the bytes land does
+    not depend on a line in somebody's `~/.aws/config`. It is empty in
+    the direct form and names the data proxy in the proxy form. The
+    direct bucket name contains dots, so that client addresses it
+    path-style: a dotted name cannot be a virtual host under https.
     """
     import boto3
+    kwargs = {}
+    if path_style(bucket):
+        from botocore.config import Config
+        kwargs["config"] = Config(s3={"addressing_style": "path"})
     return boto3.Session(profile_name=profile, region_name=region or None
-                         ).client("s3", endpoint_url=endpoint or None)
+                         ).client("s3", endpoint_url=endpoint or None,
+                                  **kwargs)
 
 
 def main(argv: list[str] | None = None, client=None) -> int:
@@ -148,12 +161,17 @@ def main(argv: list[str] | None = None, client=None) -> int:
     ap.add_argument("--endpoint",
                     help="S3 endpoint; defaults to endpoint_url in "
                          "catalog.publish.yaml")
+    ap.add_argument("--via", choices=("direct", "proxy"), default="direct",
+                    help="direct (default): the direct S3 bucket; proxy: "
+                         "the data proxy, as the config writes it")
     ap.add_argument("--dry-run", action="store_true",
                     help="HEAD only; print what would upload")
     ap.add_argument("files", nargs="+", help="files under --data-dir")
     a = ap.parse_args(argv)
 
     config = load_config()
+    if a.via == "direct":
+        config = to_direct(config)
     bucket, prefix = split_s3_uri(config["write_prefix"])
     uploads = plan_uploads(Path(a.data_dir), a.files, prefix, a.key_prefix)
     suffix = a.key_prefix.strip("/")
@@ -162,7 +180,8 @@ def main(argv: list[str] | None = None, client=None) -> int:
           f"target: s3://{bucket}/{prefix}{'/' + suffix if suffix else ''}")
     if client is None:
         client = make_client(a.profile, config.get("region"),
-                             a.endpoint or config.get("endpoint_url"))
+                             a.endpoint or config.get("endpoint_url"),
+                             bucket)
     outcomes = [upload_one(client, bucket, u, a.force, a.dry_run) for u in uploads]
     print(f"{len(outcomes)} file(s): {outcomes.count('uploaded')} uploaded, "
           f"{outcomes.count('skipped')} skipped"

@@ -23,12 +23,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 from publish import (  # noqa: E402
+    DIRECT_BUCKET,
     Upload,
+    _check_source_coop_addressing,
     aws_session,
     collect_uploads,
     content_type_for,
     is_unchanged,
+    path_style,
     split_s3_uri,
+    to_direct,
     unedited_sentinels,
     upload_all,
 )
@@ -156,6 +160,50 @@ check(
     }) == [],
     "an edited config is accepted",
 )
+
+# --- the two Source Cooperative addressings ----------------------------
+# Both pure forms pass the guard. Only the mix is refused: the proxy
+# endpoint with the direct bucket does not fail cleanly downstream.
+PROXY_FORM = {
+    "write_prefix": "s3://tge-labs/some-product/",
+    "endpoint_url": "https://data.source.coop",
+}
+DIRECT_FORM = {
+    "write_prefix": f"s3://{DIRECT_BUCKET}/tge-labs/some-product",
+}
+
+
+def refused(config: dict) -> bool:
+    try:
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            _check_source_coop_addressing(Path("catalog.publish.yaml"), config)
+    except SystemExit:
+        return True
+    return False
+
+
+check(not refused(PROXY_FORM), "the proxy form passes the guard")
+check(not refused(DIRECT_FORM), "the direct form passes the guard")
+check(not refused({"write_prefix": "s3://my-bucket/prefix"}),
+      "ordinary AWS S3 passes the guard")
+check(
+    refused({**DIRECT_FORM, "endpoint_url": "https://data.source.coop"}),
+    "the direct bucket through the proxy endpoint is refused",
+)
+
+direct = to_direct(PROXY_FORM)
+check(
+    direct["write_prefix"] == f"s3://{DIRECT_BUCKET}/tge-labs/some-product",
+    "to_direct moves the account into the key prefix",
+)
+check("endpoint_url" not in direct, "to_direct drops the proxy endpoint")
+check(to_direct(dict(DIRECT_FORM)) == DIRECT_FORM,
+      "a direct config comes back unchanged")
+check(PROXY_FORM["endpoint_url"] == "https://data.source.coop",
+      "to_direct does not mutate its input")
+
+check(path_style(DIRECT_BUCKET), "the direct bucket is path-style")
+check(not path_style("tge-labs"), "the proxy bucket is not")
 
 # --- the parallel upload pool ------------------------------------------
 # A fake session stands in for boto3, so this stays offline and has no
