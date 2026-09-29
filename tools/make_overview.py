@@ -41,9 +41,10 @@ Nodata is 0 throughout, not an alpha band, and that is deliberate.
 `gdalbuildvrt -srcnodata 0` makes each source skip its nodata pixels, so
 one zone's empty corner cannot erase the neighbouring zone's data where
 their rectangles overlap -- which is exactly what an alpha band would do,
-because a VRT paints sources in order and an alpha band is data. The COG
-driver then turns that nodata back into a real alpha band on the way out,
-via `ADD_ALPHA`.
+because a VRT paints sources in order and an alpha band is data. On the
+way out, `-b mask` turns the nodata mask into an alpha band, and the COG
+driver stores that alpha as the internal transparency mask that JPEG
+compression requires.
 
 The stretch
 -----------
@@ -379,20 +380,27 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          "-b", "mask", "-colorinterp", "red,green,blue,alpha",
          str(mosaic), str(rgba)], "gdal_translate alpha")
 
-    # DEFLATE, not WebP or JPEG, and the choice is about the readers.
-    # Every GDAL build, every geotiff.js, and every browser COG renderer
-    # decodes DEFLATE. WebP-in-TIFF needs a GDAL built with libwebp and a
-    # client that hands tile bytes to a browser image decoder, and a
-    # reader without either shows an empty layer with no error. JPEG
-    # cannot carry the alpha band. DEFLATE is lossless and larger, and
-    # that is the accepted cost of a browse layer every client can read.
+    # JPEG, not WebP and not a lossless codec, and the choice is about
+    # the readers and the bytes. JPEG-in-TIFF is the most widely decoded
+    # compression there is: every GDAL build, every geotiff.js, and the
+    # browser COG renderers all read it. WebP-in-TIFF needs a GDAL built
+    # with libwebp, and a reader without it shows an empty layer with no
+    # error. Lossless was measured and rejected: DEFLATE came to 9.6 GB
+    # a quarter against about 1.1 GB here, for a browse layer that was
+    # lossy WebP before. The COG driver turns the alpha band into an
+    # internal transparency mask, which mask-aware readers apply; a
+    # reader that ignores masks shows black ocean rather than nothing.
+    #
+    # Quality is one number for all 36 quarters, like ZOOM: a quarter
+    # compressed differently would look different mid-scrub.
     final = part / "overview.tif"
     tmp = final.with_name(f".{final.name}.tmp")
     t0 = time.monotonic()
     run(["gdal_translate", "-q", "-of", "COG", str(rgba), str(tmp),
-         "-co", "COMPRESS=DEFLATE",
-         "-co", "OVERVIEW_COMPRESS=DEFLATE",
-         "-co", "PREDICTOR=YES",
+         "-co", "COMPRESS=JPEG",
+         "-co", "OVERVIEW_COMPRESS=JPEG",
+         "-co", "QUALITY=85",
+         "-co", "OVERVIEW_QUALITY=85",
          "-co", "TILING_SCHEME=GoogleMapsCompatible",
          "-co", f"ZOOM_LEVEL={zoom}",
          "-co", "SPARSE_OK=TRUE",
@@ -401,7 +409,7 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          "-co", "BIGTIFF=IF_SAFER",
          "-co", "NUM_THREADS=ALL_CPUS"], "gdal_translate COG")
     os.replace(tmp, final)
-    say(f"{year} {quarter}: {final} written, DEFLATE, "
+    say(f"{year} {quarter}: {final} written, JPEG+mask, "
         f"{final.stat().st_size / 1e6:,.1f} MB, "
         f"{time.monotonic() - t0:,.1f}s")
     if not keep_scratch:

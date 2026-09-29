@@ -1,7 +1,8 @@
 // The quarterly overview COG, read as a Web Mercator tile archive.
 //
-// `mosaics/quarter=YYYY.Qn/overview.tif` is an RGBA WebP COG already in
-// EPSG:3857, tiled in 256-pixel blocks, with an internal overview pyramid. That
+// `mosaics/quarter=YYYY.Qn/overview.tif` is a JPEG COG with an internal
+// transparency mask, already in EPSG:3857, tiled in 256-pixel blocks, with an
+// internal overview pyramid. That
 // combination is not just convenient — it means the file is *already* a tile
 // pyramid, and the pipeline aligns its origin and base resolution to the Web
 // Mercator tile grid, so a map tile and an internal block are usually the same
@@ -14,17 +15,18 @@
 //      through proj4 from the scene's UTM grid; here source and destination are
 //      the same projection, so there is nothing to resample and nothing to get
 //      subtly wrong.
-//   2. Almost no pixel work. The blocks are DEFLATE with the horizontal
-//      predictor — chosen over WebP because every COG reader everywhere
-//      decodes DEFLATE, where WebP-in-TIFF needs a GDAL built with libwebp
-//      and shows an empty layer without one. A block inflates through the
-//      browser's own DecompressionStream, the predictor is undone in one
-//      additive pass, and the bytes are already ImageData's RGBA layout, so
-//      they go straight to `createImageBitmap` and from there to MapLibre as
-//      a texture. geotiff.js is used here only to parse the IFDs, which is
-//      what it is good at. (A WebP-compressed overview still renders — its
-//      blocks are complete WebP images and go to `createImageBitmap`
-//      directly — so older builds of the layer keep working.)
+//   2. Almost no pixel work. The blocks are JPEG — chosen because
+//      JPEG-in-TIFF is the most widely decoded compression there is, where
+//      WebP-in-TIFF needs a GDAL built with libwebp and shows an empty layer
+//      without one, and lossless DEFLATE measured 13x the bytes. A block
+//      plus its IFD's shared JPEGTables is a standalone JPEG, so the bytes
+//      go to `createImageBitmap` and from there to MapLibre as a texture.
+//      Transparency lives in the mask IFDs; a mask tile is only decoded and
+//      composited where it says anything, which on this planet is the
+//      coastline blocks. geotiff.js is used here only to parse the IFDs,
+//      which is what it is good at. (DEFLATE and WebP overviews still
+//      render, dispatched on the Compression tag, so older builds of the
+//      layer keep working.)
 //   3. The same byte window every quarter. Because the grid is shared across
 //      all 36 files, the tile a viewport needs from 2017 Q1 sits at the same
 //      place in the pyramid as the one it needs from 2025 Q4. Prefetching the
@@ -61,8 +63,23 @@ export function openOverview(quarter) {
       const href = overviewUrl(quarter);
       const tiff = await openCogHeaders(href);
       const count = await tiff.getImageCount();
-      const images = [];
-      for (let i = 0; i < count; i++) images.push(await tiff.getImage(i));
+      const all = [];
+      for (let i = 0; i < count; i++) all.push(await tiff.getImage(i));
+
+      // A JPEG COG stores its transparency as mask IFDs — one per level,
+      // flagged by NewSubfileType bit 2 — interleaved into the same chain
+      // as the imagery. Split the chain, and pair each imagery level with
+      // the mask of its own dimensions.
+      const isMask = [];
+      for (const image of all) {
+        const dir = image.fileDirectory;
+        const sub = dir.hasTag("NewSubfileType")
+          ? Number(await dir.loadValue("NewSubfileType")) : 0;
+        isMask.push((sub & 4) !== 0);
+      }
+      const images = all.filter((_, i) => !isMask[i]);
+      const masks = all.filter((_, i) => isMask[i]);
+
       const base = images[0];
       // getOrigin/getResolution read tags synchronously and throw if the tag
       // was never loaded, so make sure they are resident first.
@@ -74,15 +91,22 @@ export function openOverview(quarter) {
       const w = base.getWidth(), h = base.getHeight();
 
       // Each IFD is the base image scaled by its width ratio; a COG's overviews
-      // carry no georeferencing of their own.
-      const levels = images.map((image) => ({
+      // carry no georeferencing of their own. JPEG levels each carry their own
+      // shared huffman and quantisation tables, loaded here once.
+      const levels = await Promise.all(images.map(async (image) => ({
         image,
+        mask: masks.find((m) => m.getWidth() === image.getWidth()
+          && m.getHeight() === image.getHeight()) ?? null,
+        tables: image.fileDirectory.hasTag("JPEGTables")
+          ? new Uint8Array(await image.fileDirectory.loadValue("JPEGTables"))
+          : null,
         scale: w / image.getWidth(),
         w: image.getWidth(),
         h: image.getHeight(),
         bw: image.getTileWidth(),
         bh: image.getTileHeight(),
-      })).sort((a, b) => a.scale - b.scale);
+      })));
+      levels.sort((a, b) => a.scale - b.scale);
 
       // The zoom whose tiles are this raster's base pixels. The pipeline builds
       // the overview on the Web Mercator grid, so this is an integer and the
@@ -134,6 +158,7 @@ const withHref = (cog, level) => ({ ...level, href: cog.href });
 // --- Block decode ----------------------------------------------------------
 
 const DEFLATE = new Set([8, 32946]);      // Adobe deflate, and the older code
+const JPEG = new Set([6, 7]);             // old- and new-style JPEG
 const WEBP = 50001;
 const HORIZONTAL_PREDICTOR = 2;
 
@@ -155,13 +180,72 @@ function unpredict(data, width, height, samples) {
   }
 }
 
-// One block's bytes to an ImageBitmap. DEFLATE inflates to bytes already in
-// ImageData's RGBA layout; a WebP block is a complete WebP image and decodes
-// through the browser directly. TIFF blocks are always padded to full size,
-// so the dimensions are the block's, never the image edge's.
-async function blockImage(cog, level, buf) {
+// A JPEG-in-TIFF tile is an abbreviated stream: its huffman and quantisation
+// tables live once in the IFD's JPEGTables tag. Prepending the tables (minus
+// their EOI marker) to the tile (minus its SOI marker) makes a standalone
+// JPEG that the browser decodes directly, so the no-pixel-work path
+// survives the compression change.
+function standaloneJpeg(tables, buf) {
+  const tile = new Uint8Array(buf);
+  if (!tables) return tile;
+  const out = new Uint8Array(tables.length - 2 + tile.length - 2);
+  out.set(tables.subarray(0, tables.length - 2), 0);
+  out.set(tile.subarray(2), tables.length - 2);
+  return out;
+}
+
+// The alpha of one block, from the level's mask IFD: DEFLATE-compressed
+// 1-bit tiles, MSB first. Returns null when the block is fully valid —
+// an absent mask tile means all-valid, because the writer only omits
+// all-zero tiles, and those have no imagery tile either — so the caller
+// can skip the canvas round trip for most of the planet's land.
+async function maskAlpha(cog, level, bx, by, signal) {
+  if (!level.mask) return null;
+  const m = { image: level.mask, w: level.w, bw: level.bw, href: cog.href };
+  const buf = await blockBytes(m, bx, by, signal).catch(() => null);
+  if (!buf || !buf.byteLength) return null;
+  let packed;
+  try {
+    packed = await inflate(buf);
+  } catch {
+    return null;
+  }
+  let and = 0xff;
+  for (let i = 0; i < packed.length; i++) and &= packed[i];
+  if (and === 0xff) return null;
+  const n = level.bw * level.bh;
+  const alpha = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    alpha[i] = (packed[i >> 3] >> (7 - (i & 7))) & 1 ? 255 : 0;
+  }
+  return alpha;
+}
+
+// One block's bytes to an ImageBitmap. JPEG stitches the shared tables back
+// on and lets the browser decode, with the mask applied as alpha only where
+// the mask says anything. DEFLATE inflates to bytes already in ImageData's
+// RGBA layout. A WebP block is a complete WebP image. TIFF blocks are always
+// padded to full size, so the dimensions are the block's, never the image
+// edge's.
+async function blockImage(cog, level, buf, bx, by, signal) {
   if (cog.compression === WEBP) {
     return createImageBitmap(new Blob([buf], { type: "image/webp" }));
+  }
+  if (JPEG.has(cog.compression)) {
+    const [bitmap, alpha] = await Promise.all([
+      createImageBitmap(new Blob([standaloneJpeg(level.tables, buf)],
+        { type: "image/jpeg" })),
+      maskAlpha(cog, level, bx, by, signal),
+    ]);
+    if (!alpha) return bitmap;
+    const canvas = new OffscreenCanvas(level.bw, level.bh);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const id = ctx.getImageData(0, 0, level.bw, level.bh);
+    const px = id.data;
+    for (let i = 0; i < alpha.length; i++) px[i * 4 + 3] = alpha[i];
+    return createImageBitmap(id);
   }
   if (!DEFLATE.has(cog.compression)) {
     throw new Error(`overview compression ${cog.compression} is not handled`);
@@ -236,7 +320,7 @@ export async function readTile(quarter, z, x, y, signal, onTile) {
   const blocks = await Promise.all(jobs.map(async ([bx, by]) => {
     const buf = await blockBytes(lvl, bx, by, signal).catch(() => null);
     if (!buf || !buf.byteLength) return null;
-    const bitmap = await blockImage(cog, lvl, buf).catch(() => null);
+    const bitmap = await blockImage(cog, lvl, buf, bx, by, signal).catch(() => null);
     return bitmap ? { bx, by, bitmap } : null;
   }));
   const got = blocks.filter(Boolean);
