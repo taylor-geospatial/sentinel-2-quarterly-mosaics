@@ -51,7 +51,7 @@
       "quarter": "2024.Q2"
     },
     "table:row_count": 28272,
-    "updated": "2026-09-29T20:18:42Z"
+    "updated": "2026-09-29T21:23:37Z"
   },
   "assets": {
     "data": {
@@ -76,8 +76,8 @@
       ],
       "description": "The quarter's global browse layer: RGB, JPEG quality 85 with an internal transparency mask, EPSG:3857 at zoom 9 (305.75 m per pixel), 256-pixel internal blocks aligned to the Web Mercator tile grid, with a full overview pyramid. Composited from the published B04, B03 and B02 COGs, stretched 0..2500 reflectance units to 0..255 with exponent 0.55. The mask is 0 where the quarter has no valid observation; a reader that ignores masks shows those pixels black.",
       "proj:code": "EPSG:3857",
-      "file:size": 1256445494,
-      "file:checksum": "1220471fd255d6fe7fc1d8c9ffc369e803356a132411e1ee633d3bedbff6c21dedc0"
+      "file:size": 1327840415,
+      "file:checksum": "1220cf906486eeb138da6295b099b829f1053452003be510756eb7bd2de091cb8953"
     },
     "thumbnail": {
       "href": "./thumbnail.webp",
