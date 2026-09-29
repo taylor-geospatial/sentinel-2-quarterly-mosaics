@@ -159,9 +159,17 @@ def stage_quarter(con, year: int, quarter: str, dest: Path, public_base: str,
     return len(values)
 
 
+# A staged quarter is exactly `YYYY.Qn.parquet`. The staging directory
+# also holds files with other schemas: make_footprints.py stages its
+# `footprints.parquet` there. A bare glob reads those too and fails on
+# the schema mismatch, so the roll-up names the shape it wants.
+QUARTER_FILE = re.compile(r"^\d{4}\.Q[1-4]\.parquet$")
+
+
 def roll_up(con, staged_dir: Path, final: Path) -> None:
     """Every staged quarter into one sorted, checked tiles.parquet."""
-    parts = sorted(staged_dir.glob("*.parquet"))
+    parts = sorted(p for p in staged_dir.glob("*.parquet")
+                   if QUARTER_FILE.match(p.name))
     if not parts:
         sys.exit(f"{staged_dir}: no staged quarter to roll up")
     union = ", ".join(f"'{p}'" for p in parts)
