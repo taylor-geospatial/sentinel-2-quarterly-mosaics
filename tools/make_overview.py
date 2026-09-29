@@ -403,7 +403,11 @@ def build(year: int, quarter: str, work: Path, out: Path, zoom: int,
          "-co", "OVERVIEW_QUALITY=85",
          "-co", "TILING_SCHEME=GoogleMapsCompatible",
          "-co", f"ZOOM_LEVEL={zoom}",
-         "-co", "SPARSE_OK=TRUE",
+         # Dense, not sparse, and it was measured the hard way. A sparse
+         # block reads as "tile not found", and @developmentseed/geotiff
+         # (the Portolan Browser renderer) throws on it, which blanks the
+         # whole viewport batch. An empty JPEG tile costs a few hundred
+         # bytes; a sparse one costs a client.
          "-co", "RESAMPLING=AVERAGE",
          "-co", "OVERVIEW_RESAMPLING=AVERAGE",
          "-co", "BIGTIFF=IF_SAFER",
