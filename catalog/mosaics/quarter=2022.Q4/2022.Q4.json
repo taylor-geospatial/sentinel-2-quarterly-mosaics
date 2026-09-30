@@ -8,7 +8,7 @@
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
   ],
-  "id": "2024.Q2",
+  "id": "2022.Q4",
   "collection": "mosaics",
   "geometry": {
     "type": "Polygon",
@@ -44,50 +44,50 @@
     90
   ],
   "properties": {
-    "datetime": "2024-04-01T00:00:00Z",
-    "start_datetime": "2024-04-01T00:00:00Z",
-    "end_datetime": "2024-06-30T23:59:59Z",
+    "datetime": "2022-10-01T00:00:00Z",
+    "start_datetime": "2022-10-01T00:00:00Z",
+    "end_datetime": "2022-12-31T23:59:59Z",
     "partition:key": {
-      "quarter": "2024.Q2"
+      "quarter": "2022.Q4"
     },
-    "table:row_count": 28272,
-    "updated": "2026-09-29T21:23:37Z"
+    "table:row_count": 29127,
+    "updated": "2026-09-30T04:31:00Z"
   },
   "assets": {
     "data": {
       "href": "./items.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "Item index, 2024 Q2",
+      "title": "Item index, 2022 Q4",
       "roles": [
         "data"
       ],
-      "description": "One row per mosaic tile of the quarter: 28,272 rows, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's history is a contiguous run. Columns are documented on the collection's `table:columns`.",
-      "table:row_count": 28272,
-      "file:size": 5291825,
-      "file:checksum": "12208b7c56d77176db5b732102411398ee5d82cd7ad6f5f985e91832866a054fbb56"
+      "description": "One row per mosaic tile of the quarter: 29,127 rows, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's history is a contiguous run. Columns are documented on the collection's `table:columns`.",
+      "table:row_count": 29127,
+      "file:size": 5386189,
+      "file:checksum": "122061289a3e43be776484c21a220bbc34a68d00ae62a5a185b86617b6eb1a217c01"
     },
     "overview": {
       "href": "./overview.tif",
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "Browse mosaic, 2024 Q2",
+      "title": "Browse mosaic, 2022 Q4",
       "roles": [
         "overview",
         "visual"
       ],
       "description": "The quarter's global browse layer: RGB, JPEG quality 85 with an internal transparency mask, dense tiles, EPSG:3857 at zoom 9 (305.75 m per pixel), 256-pixel internal blocks aligned to the Web Mercator tile grid, with a full overview pyramid. Composited from the published B04, B03 and B02 COGs, stretched 0..2500 reflectance units to 0..255 with exponent 0.55. The mask is 0 where the quarter has no valid observation; a reader that ignores masks shows those pixels black.",
       "proj:code": "EPSG:3857",
-      "file:size": 1327840415,
-      "file:checksum": "1220cf906486eeb138da6295b099b829f1053452003be510756eb7bd2de091cb8953"
+      "file:size": 1603110163,
+      "file:checksum": "1220f7cda720c4800380bb77e2a7cefa18665ef3cfafda8768e493bef1e3c13bd9b2"
     },
     "thumbnail": {
       "href": "./thumbnail.webp",
       "type": "image/webp",
-      "title": "Global thumbnail, 2024 Q2",
+      "title": "Global thumbnail, 2022 Q4",
       "roles": [
         "thumbnail"
       ],
-      "file:size": 87382,
-      "file:checksum": "122062602b602632caaa6a0f5cfc5fc7c8a046595cd9e60f5b301c012247e1f89af5"
+      "file:size": 103076,
+      "file:checksum": "1220d506b169a374fc34cbb6c7d4d3504cf7a6ab8d4867a4125fa94d4d14d081d44c"
     }
   },
   "links": [
