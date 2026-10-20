@@ -10,6 +10,7 @@ No network, no AWS, no credentials.
 
 Run: python3 tests/test_publish.py
 """
+
 import hashlib
 import importlib.util
 import io
@@ -94,8 +95,11 @@ with tempfile.TemporaryDirectory() as tmp:
         "a/prefix/roads/styles/default.json",
         "a/prefix/_assets/logo.svg",
     }
-    check(keys == expected, f"upload set wrong.\n  extra:   {keys - expected}"
-                            f"\n  missing: {expected - keys}")
+    check(
+        keys == expected,
+        f"upload set wrong.\n  extra:   {keys - expected}"
+        f"\n  missing: {expected - keys}",
+    )
 
     # The bare-prefix case: no prefix at all.
     flat = dict(config, write_prefix="s3://a-bucket")
@@ -112,29 +116,29 @@ check(split_s3_uri("s3://b") == ("b", ""), "bare bucket")
 check(split_s3_uri("s3://b/") == ("b", ""), "bare bucket, trailing slash")
 
 # --- content types -----------------------------------------------------
-check(content_type_for(Path("a/catalog.json")) == "application/json",
-      "plain json")
+check(content_type_for(Path("a/catalog.json")) == "application/json", "plain json")
 check(
     content_type_for(Path("a/styles/default.json"))
     == "application/vnd.mapbox.style+json",
     "json under styles/ is a MapLibre style",
 )
 check(
-    content_type_for(Path("a/roads.style.json"))
-    == "application/vnd.mapbox.style+json",
+    content_type_for(Path("a/roads.style.json")) == "application/vnd.mapbox.style+json",
     "*.style.json is a MapLibre style",
 )
 check(
     content_type_for(Path("a/d.parquet")) == "application/vnd.apache.parquet",
     "parquet",
 )
-check(content_type_for(Path("a/x.unknown")) == "application/octet-stream",
-      "unknown suffix falls back")
+check(
+    content_type_for(Path("a/x.unknown")) == "application/octet-stream",
+    "unknown suffix falls back",
+)
 
 # --- change detection --------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     local = write(Path(tmp) / "f.json", "hello")
-    digest = hashlib.md5(b"hello").hexdigest()  # noqa: S324
+    digest = hashlib.md5(b"hello").hexdigest()
     upload = Upload(local, "k", "application/json")
 
     check(is_unchanged(upload, {"k": (5, digest)}), "identical bytes")
@@ -147,17 +151,23 @@ with tempfile.TemporaryDirectory() as tmp:
 
 # --- the sentinel guard ------------------------------------------------
 check(
-    unedited_sentinels({
-        "write_prefix": "s3://EXAMPLE-BUCKET/EXAMPLE-PREFIX",
-        "public_base": "https://example.invalid/EXAMPLE-PREFIX",
-    }) != [],
+    unedited_sentinels(
+        {
+            "write_prefix": "s3://EXAMPLE-BUCKET/EXAMPLE-PREFIX",
+            "public_base": "https://example.invalid/EXAMPLE-PREFIX",
+        }
+    )
+    != [],
     "an unedited config is refused",
 )
 check(
-    unedited_sentinels({
-        "write_prefix": "s3://real/prefix",
-        "public_base": "https://data.example.org/prefix",
-    }) == [],
+    unedited_sentinels(
+        {
+            "write_prefix": "s3://real/prefix",
+            "public_base": "https://data.example.org/prefix",
+        }
+    )
+    == [],
     "an edited config is accepted",
 )
 
@@ -184,8 +194,10 @@ def refused(config: dict) -> bool:
 
 check(not refused(PROXY_FORM), "the proxy form passes the guard")
 check(not refused(DIRECT_FORM), "the direct form passes the guard")
-check(not refused({"write_prefix": "s3://my-bucket/prefix"}),
-      "ordinary AWS S3 passes the guard")
+check(
+    not refused({"write_prefix": "s3://my-bucket/prefix"}),
+    "ordinary AWS S3 passes the guard",
+)
 check(
     refused({**DIRECT_FORM, "endpoint_url": "https://data.source.coop"}),
     "the direct bucket through the proxy endpoint is refused",
@@ -197,13 +209,17 @@ check(
     "to_direct moves the account into the key prefix",
 )
 check("endpoint_url" not in direct, "to_direct drops the proxy endpoint")
-check(to_direct(dict(DIRECT_FORM)) == DIRECT_FORM,
-      "a direct config comes back unchanged")
-check(PROXY_FORM["endpoint_url"] == "https://data.source.coop",
-      "to_direct does not mutate its input")
+check(
+    to_direct(dict(DIRECT_FORM)) == DIRECT_FORM, "a direct config comes back unchanged"
+)
+check(
+    PROXY_FORM["endpoint_url"] == "https://data.source.coop",
+    "to_direct does not mutate its input",
+)
 
 check(path_style(DIRECT_BUCKET), "the direct bucket is path-style")
 check(not path_style("tge-labs"), "the proxy bucket is not")
+
 
 # --- the parallel upload pool ------------------------------------------
 # A fake session stands in for boto3, so this stays offline and has no

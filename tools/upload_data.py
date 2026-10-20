@@ -30,7 +30,6 @@ compares by hash. A multi-gigabyte partition uploads in many parts, so it
 compares by size. A truncated object of the correct size stays accepted on
 every later run. Use ``--force`` to re-upload the data and clear that state.
 """
-from __future__ import annotations
 
 import argparse
 import sys
@@ -38,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from publish import (  # noqa: E402
+from publish import (
     ROOT,
     Upload,
     aws_session,
@@ -99,9 +98,7 @@ def is_data_publishable(rel: Path) -> bool:
     return is_publishable(rel) and rel.suffix.lower() in PUBLISHABLE_SUFFIXES
 
 
-def collect_data_uploads(
-    config: dict[str, str], root: Path = ROOT
-) -> list[Upload]:
+def collect_data_uploads(config: dict[str, str], root: Path = ROOT) -> list[Upload]:
     """Every staged data file that would be uploaded, in sorted order.
 
     The walk is rooted at ``data_dir`` and nothing else. Keys go under the
@@ -127,9 +124,7 @@ def main() -> int:
         description="Upload staged data files to the catalog's bucket prefix.",
         epilog="Dry run by default. Never deletes.",
     )
-    parser.add_argument(
-        "--confirm", action="store_true", help="actually upload"
-    )
+    parser.add_argument("--confirm", action="store_true", help="actually upload")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -182,13 +177,12 @@ def main() -> int:
         session = aws_session(config)
     except ImportError:
         sys.exit("boto3 is required to upload. Run: pip install boto3")
-    except Exception as exc:  # noqa: BLE001 - stop before any upload
+    except Exception as exc:
         sys.exit(f"cannot build an AWS session: {exc}")
 
     failed = upload_all(session, bucket, changed, config)
     if failed:
-        print(f"\n{len(failed)} of {len(changed)} file(s) failed:",
-              file=sys.stderr)
+        print(f"\n{len(failed)} of {len(changed)} file(s) failed:", file=sys.stderr)
         for key in sorted(failed):
             print(f"  {key}", file=sys.stderr)
         return 1

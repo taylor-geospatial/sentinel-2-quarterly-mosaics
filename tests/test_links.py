@@ -12,6 +12,7 @@ resolves. Leave CI_LIGHT unset locally to check every relative href on disk.
 
 Run: python3 tests/test_links.py
 """
+
 import json
 import os
 import sys
@@ -25,8 +26,17 @@ from publish import load_config  # noqa: E402
 # The exemption reads the suffix and nothing else. A directory rule or a path
 # prefix rule widens on its own as the catalog grows. This tuple does not.
 DATA_SUFFIXES = (
-    ".parquet", ".pmtiles", ".tif", ".tiff", ".copc.laz", ".laz", ".gpkg",
-    ".zarr", ".geojsonl", ".shp", ".zip",
+    ".parquet",
+    ".pmtiles",
+    ".tif",
+    ".tiff",
+    ".copc.laz",
+    ".laz",
+    ".gpkg",
+    ".zarr",
+    ".geojsonl",
+    ".shp",
+    ".zip",
 )
 
 
@@ -71,7 +81,9 @@ def stac_documents(base: Path, errors: list[str]) -> list[Path]:
             errors.append(f"{path.relative_to(base)}: invalid JSON ({exc})")
             continue
         if isinstance(doc, dict) and doc.get("type") in {
-            "Catalog", "Collection", "Feature"
+            "Catalog",
+            "Collection",
+            "Feature",
         }:
             out.append(path)
     return out
@@ -123,8 +135,9 @@ def check_links(base: Path, ci_light: bool = False) -> list[str]:
 
 if __name__ == "__main__":
     config = load_config()
-    errors = check_links(ROOT / config["publish_dir"],
-                         os.environ.get("CI_LIGHT") == "1")
+    errors = check_links(
+        ROOT / config["publish_dir"], os.environ.get("CI_LIGHT") == "1"
+    )
     if errors:
         print("\n".join(f"error  {e}" for e in errors))
         raise SystemExit(1)

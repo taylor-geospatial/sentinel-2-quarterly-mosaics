@@ -59,8 +59,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def translate_path(self, path):
         clean = path.split("?", 1)[0].split("#", 1)[0]
-        if self.data_dir and (clean == self.data_prefix or clean.startswith(self.data_prefix + "/")):
-            rel = clean[len(self.data_prefix):].lstrip("/")
+        if self.data_dir and (
+            clean == self.data_prefix or clean.startswith(self.data_prefix + "/")
+        ):
+            rel = clean[len(self.data_prefix) :].lstrip("/")
             root = self.data_dir
         else:
             rel = clean.lstrip("/")
@@ -77,7 +79,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Expose-Headers", "Content-Range, Content-Length")
+        self.send_header(
+            "Access-Control-Expose-Headers", "Content-Range, Content-Length"
+        )
         self.send_header("Accept-Ranges", "bytes")
         # A dev server that lets the browser cache would hide every rebuild of
         # the data behind a stale entry.
@@ -138,10 +142,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
 
-    def log_message(self, fmt, *args):
+    def log_message(self, format: str, *args: object) -> None:
         if os.environ.get("DEVSERVER_QUIET"):
             return
-        super().log_message(fmt, *args)
+        super().log_message(format, *args)
 
 
 class Server(socketserver.ThreadingTCPServer):
@@ -169,8 +173,12 @@ def main():
     with Server((args.host, args.port), Handler) as httpd:
         print(f"app   http://{args.host}:{args.port}/  ({args.app})")
         if args.data:
-            print(f"data  http://{args.host}:{args.port}{Handler.data_prefix}/  ({args.data})")
-            print(f"open  http://{args.host}:{args.port}/?base=http://{args.host}:{args.port}{Handler.data_prefix}")
+            print(
+                f"data  http://{args.host}:{args.port}{Handler.data_prefix}/  ({args.data})"
+            )
+            print(
+                f"open  http://{args.host}:{args.port}/?base=http://{args.host}:{args.port}{Handler.data_prefix}"
+            )
         httpd.serve_forever()
 
 

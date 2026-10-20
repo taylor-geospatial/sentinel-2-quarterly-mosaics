@@ -29,7 +29,6 @@ what makes the measure affordable across a million tiles. Tiles that
 were not sampled keep NULL, which the collection documents as "not read
 yet" rather than "no data".
 """
-from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
@@ -46,20 +45,29 @@ import mgrs_grid  # noqa: E402
 import schema  # noqa: E402
 from publish import load_config  # noqa: E402
 
-MANIFEST_URL = ("https://data.source.coop/tge-labs/"
-                "sentinel-2-quarterly-cloudless-mosaics/manifest/"
-                "manifest_{year}_{quarter}.parquet")
+MANIFEST_URL = (
+    "https://data.source.coop/tge-labs/"
+    "sentinel-2-quarterly-cloudless-mosaics/manifest/"
+    "manifest_{year}_{quarter}.parquet"
+)
 QUARTER_RE = re.compile(r"^(?P<year>\d{4})\.(?P<quarter>Q[1-4])$")
 NODATA = -32768
 SORT_KEY = "subtile,quarter"
 ROW_GROUP_SIZE = 20_000
 
 COLUMNS = [
-    ("subtile", "VARCHAR"), ("mgrs_tile", "VARCHAR"), ("year", "SMALLINT"),
-    ("quarter_num", "TINYINT"), ("quarter", "VARCHAR"),
-    ("bytes_total", "BIGINT"), ("bytes_b02", "BIGINT"), ("bytes_b03", "BIGINT"),
-    ("bytes_b04", "BIGINT"), ("bytes_b08", "BIGINT"),
-    ("valid_fraction", "FLOAT"), ("geometry", "GEOMETRY"),
+    ("subtile", "VARCHAR"),
+    ("mgrs_tile", "VARCHAR"),
+    ("year", "SMALLINT"),
+    ("quarter_num", "TINYINT"),
+    ("quarter", "VARCHAR"),
+    ("bytes_total", "BIGINT"),
+    ("bytes_b02", "BIGINT"),
+    ("bytes_b03", "BIGINT"),
+    ("bytes_b04", "BIGINT"),
+    ("bytes_b08", "BIGINT"),
+    ("valid_fraction", "FLOAT"),
+    ("geometry", "GEOMETRY"),
 ]
 
 
@@ -74,8 +82,9 @@ def parse_quarter(value: str) -> tuple[int, str]:
     return int(m["year"]), m["quarter"]
 
 
-def measure_valid_fraction(tiles: list[str], public_base: str, year: int,
-                           quarter: str, jobs: int) -> dict[str, float]:
+def measure_valid_fraction(
+    tiles: list[str], public_base: str, year: int, quarter: str, jobs: int
+) -> dict[str, float]:
     """Fraction of real pixels per tile, from the smallest red overview."""
     os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
     try:
@@ -85,14 +94,14 @@ def measure_valid_fraction(tiles: list[str], public_base: str, year: int,
         sys.exit("--valid-fraction needs rasterio and numpy")
 
     def one(tile: str) -> tuple[str, float | None]:
-        url = (f"/vsicurl/{public_base}/{year}/{quarter}/{tile}/B04.tif")
+        url = f"/vsicurl/{public_base}/{year}/{quarter}/{tile}/B04.tif"
         try:
             # OVERVIEW_LEVEL is 0-based over [2x, 4x, 8x, 16x, 32x], so 4
             # is the 32x overview: 313 x 313 for a 10,008 px tile.
             with rasterio.open(url, OVERVIEW_LEVEL=4) as ds:
                 data = ds.read(1)
             return tile, float(np.count_nonzero(data != NODATA) / data.size)
-        except Exception as exc:                      # noqa: BLE001
+        except Exception as exc:
             print(f"  {tile}: {exc}", file=sys.stderr)
             return tile, None
 
@@ -102,13 +111,23 @@ def measure_valid_fraction(tiles: list[str], public_base: str, year: int,
         for tile, value in pool.map(one, tiles):
             if value is not None:
                 out[tile] = value
-    say(f"valid_fraction: {len(out):,} of {len(tiles):,} tile(s) measured, "
-        f"{time.monotonic() - t0:,.1f}s")
+    say(
+        f"valid_fraction: {len(out):,} of {len(tiles):,} tile(s) measured, "
+        f"{time.monotonic() - t0:,.1f}s"
+    )
     return out
 
 
-def stage_quarter(con, year: int, quarter: str, dest: Path, public_base: str,
-                  manifest: str | None, sample: str | None, jobs: int) -> int:
+def stage_quarter(
+    con,
+    year: int,
+    quarter: str,
+    dest: Path,
+    public_base: str,
+    manifest: str | None,
+    sample: str | None,
+    jobs: int,
+) -> int:
     """One quarter's rows, from its manifest plus derived geometry."""
     source = manifest or MANIFEST_URL.format(year=year, quarter=quarter)
     rows = con.execute(f"""
@@ -125,29 +144,42 @@ def stage_quarter(con, year: int, quarter: str, dest: Path, public_base: str,
     fractions: dict[str, float] = {}
     if sample:
         import random
-        picked = tiles if sample == "all" else random.Random(0).sample(
-            tiles, min(int(sample), len(tiles)))
-        fractions = measure_valid_fraction(picked, public_base, year, quarter,
-                                           jobs)
+
+        picked = (
+            tiles
+            if sample == "all"
+            else random.Random(0).sample(tiles, min(int(sample), len(tiles)))
+        )
+        fractions = measure_valid_fraction(picked, public_base, year, quarter, jobs)
 
     quarter_num = int(quarter[1])
     values = []
     for tile in tiles:
         band = sizes[tile]
         geom, _ = mgrs_grid.geometry_of(tile)
-        values.append((
-            tile, mgrs_grid.cell_of(tile), year, quarter_num,
-            f"{year}.{quarter}", sum(band.values()),
-            band.get("B02"), band.get("B03"), band.get("B04"), band.get("B08"),
-            fractions.get(tile), __import__("json").dumps(geom)))
+        values.append(
+            (
+                tile,
+                mgrs_grid.cell_of(tile),
+                year,
+                quarter_num,
+                f"{year}.{quarter}",
+                sum(band.values()),
+                band.get("B02"),
+                band.get("B03"),
+                band.get("B04"),
+                band.get("B08"),
+                fractions.get(tile),
+                __import__("json").dumps(geom),
+            )
+        )
     con.execute("DROP TABLE IF EXISTS staged")
     con.execute("""CREATE TABLE staged (
         subtile VARCHAR, mgrs_tile VARCHAR, year SMALLINT, quarter_num TINYINT,
         quarter VARCHAR, bytes_total BIGINT, bytes_b02 BIGINT, bytes_b03 BIGINT,
         bytes_b04 BIGINT, bytes_b08 BIGINT, valid_fraction FLOAT,
         geometry_json VARCHAR)""")
-    con.executemany(
-        "INSERT INTO staged VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", values)
+    con.executemany("INSERT INTO staged VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", values)
     tmp = dest.with_name(f".{dest.name}.tmp")
     con.execute(f"""
         COPY (SELECT * EXCLUDE (geometry_json),
@@ -168,8 +200,9 @@ QUARTER_FILE = re.compile(r"^\d{4}\.Q[1-4]\.parquet$")
 
 def roll_up(con, staged_dir: Path, final: Path) -> None:
     """Every staged quarter into one sorted, checked tiles.parquet."""
-    parts = sorted(p for p in staged_dir.glob("*.parquet")
-                   if QUARTER_FILE.match(p.name))
+    parts = sorted(
+        p for p in staged_dir.glob("*.parquet") if QUARTER_FILE.match(p.name)
+    )
     if not parts:
         sys.exit(f"{staged_dir}: no staged quarter to roll up")
     union = ", ".join(f"'{p}'" for p in parts)
@@ -178,8 +211,7 @@ def roll_up(con, staged_dir: Path, final: Path) -> None:
         COPY (SELECT * FROM read_parquet([{union}]))
         TO '{merged}' (FORMAT PARQUET, COMPRESSION zstd, COMPRESSION_LEVEL 1)
     """)
-    rows = con.execute(
-        f"SELECT count(*) FROM read_parquet('{merged}')").fetchone()[0]
+    rows = con.execute(f"SELECT count(*) FROM read_parquet('{merged}')").fetchone()[0]
     say(f"coverage: {len(parts)} quarter(s), {rows:,} row(s) staged")
 
     final.parent.mkdir(parents=True, exist_ok=True)
@@ -188,22 +220,39 @@ def roll_up(con, staged_dir: Path, final: Path) -> None:
     try:
         t0 = time.monotonic()
         r = subprocess.run(
-            ["gpio", "sort", "column", str(merged), str(tmp), SORT_KEY,
-             "--geoparquet-version", "2.0", "--compression", "zstd",
-             "--compression-level", str(schema.ZSTD_LEVEL),
-             "--row-group-size", str(ROW_GROUP_SIZE)],
-            capture_output=True, text=True)
+            [
+                "gpio",
+                "sort",
+                "column",
+                str(merged),
+                str(tmp),
+                SORT_KEY,
+                "--geoparquet-version",
+                "2.0",
+                "--compression",
+                "zstd",
+                "--compression-level",
+                str(schema.ZSTD_LEVEL),
+                "--row-group-size",
+                str(ROW_GROUP_SIZE),
+            ],
+            capture_output=True,
+            text=True,
+        )
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
             sys.exit("gpio sort failed for the coverage table")
-        chk = subprocess.run(["gpio", "check", "all", str(tmp)],
-                             capture_output=True, text=True)
+        chk = subprocess.run(
+            ["gpio", "check", "all", str(tmp)], capture_output=True, text=True
+        )
         if chk.returncode != 0:
             print(chk.stdout[-2000:], chk.stderr[-2000:], file=sys.stderr)
             sys.exit("gpio check failed for the coverage table")
         os.replace(tmp, final)
-        say(f"coverage: {final} written, {final.stat().st_size / 1e6:,.1f} MB, "
-            f"gpio check all passed, {time.monotonic() - t0:,.1f}s")
+        say(
+            f"coverage: {final} written, {final.stat().st_size / 1e6:,.1f} MB, "
+            f"gpio check all passed, {time.monotonic() - t0:,.1f}s"
+        )
     finally:
         tmp.unlink(missing_ok=True)
         merged.unlink(missing_ok=True)
@@ -215,18 +264,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--quarters", help="comma-separated YYYY.Qn to stage")
     ap.add_argument("--manifest", help="manifest path or URL; one quarter only")
-    ap.add_argument("--valid-fraction", metavar="N|all",
-                    help="measure valid_fraction for N sampled tiles")
+    ap.add_argument(
+        "--valid-fraction",
+        metavar="N|all",
+        help="measure valid_fraction for N sampled tiles",
+    )
     ap.add_argument("--jobs", type=int, default=16)
-    ap.add_argument("--rebuild", action="store_true",
-                    help="roll up the staged quarters without staging any")
-    ap.add_argument("--force", action="store_true",
-                    help="restage a quarter that is already staged")
+    ap.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="roll up the staged quarters without staging any",
+    )
+    ap.add_argument(
+        "--force", action="store_true", help="restage a quarter that is already staged"
+    )
     a = ap.parse_args(argv)
     if not a.quarters and not a.rebuild:
         ap.error("pass --quarters or --rebuild")
 
     import duckdb
+
     config = load_config()
     public_base = config["public_base"].rstrip("/")
     staged_dir = Path(a.work) / "coverage"
@@ -236,17 +293,17 @@ def main(argv: list[str] | None = None) -> int:
     con.execute("INSTALL httpfs; LOAD httpfs;")
     con.execute("SET TimeZone='UTC';")
 
-    for value in (a.quarters.split(",") if a.quarters else []):
+    for value in a.quarters.split(",") if a.quarters else []:
         year, quarter = parse_quarter(value.strip())
         dest = staged_dir / f"{year}.{quarter}.parquet"
         if dest.is_file() and not a.force and not a.valid_fraction:
             say(f"{year}.{quarter}: already staged, skipping")
             continue
         t0 = time.monotonic()
-        n = stage_quarter(con, year, quarter, dest, public_base, a.manifest,
-                          a.valid_fraction, a.jobs)
-        say(f"{year}.{quarter}: staged {n:,} row(s), "
-            f"{time.monotonic() - t0:,.1f}s")
+        n = stage_quarter(
+            con, year, quarter, dest, public_base, a.manifest, a.valid_fraction, a.jobs
+        )
+        say(f"{year}.{quarter}: staged {n:,} row(s), {time.monotonic() - t0:,.1f}s")
 
     roll_up(con, staged_dir, Path(a.out) / "coverage" / "tiles.parquet")
     return 0

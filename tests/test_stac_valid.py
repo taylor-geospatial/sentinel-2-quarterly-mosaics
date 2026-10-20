@@ -56,10 +56,12 @@ that no validator read. The failure message gives the install command.
 
 Run: python3 tests/test_stac_valid.py
 """
+
 import json
 import re
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -69,7 +71,7 @@ from publish import load_config  # noqa: E402
 INSTALL = "python -m pip install stac-check"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     """Report the problem, name the fix, and exit non-zero."""
     print(f"error  {message}")
     print(f"       install stac-check with: {INSTALL}")

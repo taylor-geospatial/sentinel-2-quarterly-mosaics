@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CI_LIGHT may skip declared PMTiles data, never broken catalog structure."""
+
 import copy
 import io
 import json
@@ -13,7 +14,7 @@ from test_links import check_links
 
 class LinkContract(unittest.TestCase):
     def setUp(self):
-        self.doc = {
+        self.doc: dict = {
             "type": "Collection",
             "assets": {
                 "footprints": {
@@ -22,11 +23,13 @@ class LinkContract(unittest.TestCase):
                     "roles": ["visual"],
                 },
             },
-            "links": [{
-                "rel": "pmtiles",
-                "href": "./footprints.pmtiles",
-                "type": "application/vnd.pmtiles",
-            }],
+            "links": [
+                {
+                    "rel": "pmtiles",
+                    "href": "./footprints.pmtiles",
+                    "type": "application/vnd.pmtiles",
+                }
+            ],
         }
 
     def errors(self, doc, ci_light=True):
@@ -52,9 +55,11 @@ class LinkContract(unittest.TestCase):
                 self.assertEqual(len(self.errors(doc)), 1)
 
     def test_pmtiles_requires_matching_visual_asset(self):
-        for field, value in (("href", "./other.pmtiles"),
-                             ("type", "application/octet-stream"),
-                             ("roles", ["data"])):
+        for field, value in (
+            ("href", "./other.pmtiles"),
+            ("type", "application/octet-stream"),
+            ("roles", ["data"]),
+        ):
             with self.subTest(field=field):
                 doc = copy.deepcopy(self.doc)
                 doc["assets"]["footprints"][field] = value
@@ -63,8 +68,7 @@ class LinkContract(unittest.TestCase):
         self.assertEqual(len(self.errors(self.doc)), 1)
 
     def test_pmtiles_requires_data_suffix_and_type(self):
-        for field, value in (("href", "./missing.json"),
-                             ("type", "application/json")):
+        for field, value in (("href", "./missing.json"), ("type", "application/json")):
             with self.subTest(field=field):
                 doc = copy.deepcopy(self.doc)
                 doc["links"][0][field] = value

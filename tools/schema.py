@@ -45,7 +45,6 @@ MGRS cell (`31UFU`) and the join key against the coverage collection;
 the Hive partition value inside the row, so a glob over every quarter
 still knows which quarter each row came from.
 """
-from __future__ import annotations
 
 import json
 import re
@@ -58,8 +57,10 @@ BANDS = ("B02", "B03", "B04", "B08")
 # the three helper columns come from. They are derived on the way into
 # the table rather than carried in the item, so the published item JSON
 # holds no underscore-prefixed properties.
-ID_RE = re.compile(r"^Sentinel-2_mosaic_(?P<year>\d{4})_(?P<quarter>Q[1-4])_"
-                   r"(?P<tile>\d{1,2}[A-Z]{3}_\d+_\d+)$")
+ID_RE = re.compile(
+    r"^Sentinel-2_mosaic_(?P<year>\d{4})_(?P<quarter>Q[1-4])_"
+    r"(?P<tile>\d{1,2}[A-Z]{3}_\d+_\d+)$"
+)
 
 # The one media type for every COG in this catalog.
 COG_TYPE = "image/tiff; application=geotiff; profile=cloud-optimized"
@@ -92,69 +93,123 @@ ZSTD_LEVEL = 18
 
 # (name, DuckDB type, description).
 COLUMNS = [
-    ("id", "VARCHAR",
-     "The upstream item id, `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`. "
-     "Unchanged from CDSE, so it joins straight against the source catalog."),
-    ("datetime", _TS,
-     "The first instant of the quarter the mosaic composites, not an "
-     "acquisition time. The compositing window is start_datetime to "
-     "end_datetime."),
-    ("start_datetime", _TS,
-     "First instant of the compositing window: the first day of the quarter."),
-    ("end_datetime", _TS,
-     "Last instant of the compositing window: the end of the last day of the "
-     "quarter."),
-    ("_tile", "VARCHAR",
-     "The bare MGRS grid cell, for example `31UFU`. Join key against the "
-     "coverage collection, and the first sort key. Query helper, not STAC."),
-    ("_subtile", "VARCHAR",
-     "The full mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. "
-     "Unique within a quarter. Query helper, not STAC."),
-    ("_quarter", "VARCHAR",
-     "The partition value, `YYYY.Qn`. Present in the row as well as the "
-     "directory name, so a glob across quarters keeps it. Query helper, not "
-     "STAC."),
-    ("grid:code", "VARCHAR",
-     "The MGRS cell in STAC grid-extension form, `MGRS-31UFU`. The bare cell "
-     "is `_tile`."),
-    ("proj:code", "VARCHAR",
-     "The tile's own CRS as an authority code, for example `EPSG:32631`. "
-     "Every tile is in its MGRS zone's UTM projection, not in EPSG:4326."),
-    ("proj:shape", "INTEGER[]",
-     "Raster shape in pixels, `[10008, 10008]` for every tile."),
-    ("proj:bbox", "DOUBLE[]",
-     "The tile's bounding box in its own projected CRS, in metres: "
-     "`[minx, miny, maxx, maxy]`, a 100,080 m square."),
+    (
+        "id",
+        "VARCHAR",
+        "The upstream item id, `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`. "
+        "Unchanged from CDSE, so it joins straight against the source catalog.",
+    ),
+    (
+        "datetime",
+        _TS,
+        "The first instant of the quarter the mosaic composites, not an "
+        "acquisition time. The compositing window is start_datetime to "
+        "end_datetime.",
+    ),
+    (
+        "start_datetime",
+        _TS,
+        "First instant of the compositing window: the first day of the quarter.",
+    ),
+    (
+        "end_datetime",
+        _TS,
+        "Last instant of the compositing window: the end of the last day of the "
+        "quarter.",
+    ),
+    (
+        "_tile",
+        "VARCHAR",
+        "The bare MGRS grid cell, for example `31UFU`. Join key against the "
+        "coverage collection, and the first sort key. Query helper, not STAC.",
+    ),
+    (
+        "_subtile",
+        "VARCHAR",
+        "The full mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. "
+        "Unique within a quarter. Query helper, not STAC.",
+    ),
+    (
+        "_quarter",
+        "VARCHAR",
+        "The partition value, `YYYY.Qn`. Present in the row as well as the "
+        "directory name, so a glob across quarters keeps it. Query helper, not "
+        "STAC.",
+    ),
+    (
+        "grid:code",
+        "VARCHAR",
+        "The MGRS cell in STAC grid-extension form, `MGRS-31UFU`. The bare cell "
+        "is `_tile`.",
+    ),
+    (
+        "proj:code",
+        "VARCHAR",
+        "The tile's own CRS as an authority code, for example `EPSG:32631`. "
+        "Every tile is in its MGRS zone's UTM projection, not in EPSG:4326.",
+    ),
+    (
+        "proj:shape",
+        "INTEGER[]",
+        "Raster shape in pixels, `[10008, 10008]` for every tile.",
+    ),
+    (
+        "proj:bbox",
+        "DOUBLE[]",
+        "The tile's bounding box in its own projected CRS, in metres: "
+        "`[minx, miny, maxx, maxy]`, a 100,080 m square.",
+    ),
     ("gsd", "DOUBLE", "Ground sample distance in metres. Always 10."),
-    ("constellation", "VARCHAR",
-     "Always `sentinel-2`. The mosaic composites observations from both "
-     "Sentinel-2 satellites, so there is no single `platform`."),
-    ("instruments", "VARCHAR[]", "Always `[\"msi\"]`."),
+    (
+        "constellation",
+        "VARCHAR",
+        "Always `sentinel-2`. The mosaic composites observations from both "
+        "Sentinel-2 satellites, so there is no single `platform`.",
+    ),
+    ("instruments", "VARCHAR[]", 'Always `["msi"]`.'),
     ("product:type", "VARCHAR", "Always `S2MSI_L3__MCQ`."),
-    ("processing:level", "VARCHAR",
-     "Always `L3`. The mosaic is a Level-3 composite of Level-2A inputs."),
-    ("B02_href", "VARCHAR",
-     "Full https URL of the blue COG. Promoted out of the assets JSON so a "
-     "reader can open a band without parsing it."),
+    (
+        "processing:level",
+        "VARCHAR",
+        "Always `L3`. The mosaic is a Level-3 composite of Level-2A inputs.",
+    ),
+    (
+        "B02_href",
+        "VARCHAR",
+        "Full https URL of the blue COG. Promoted out of the assets JSON so a "
+        "reader can open a band without parsing it.",
+    ),
     ("B03_href", "VARCHAR", "Full https URL of the green COG."),
     ("B04_href", "VARCHAR", "Full https URL of the red COG."),
     ("B08_href", "VARCHAR", "Full https URL of the near-infrared COG."),
-    ("assets", "VARCHAR",
-     "The item's whole `assets` object as a JSON string, verbatim. Parse it "
-     "with `json_extract` in DuckDB or `JSON.parse` in a browser. It carries "
-     "`file:size`, `proj:transform` and `proj:shape` per band."),
-    ("links", _LINKS,
-     "The item's links, reduced to href, rel, title and type. `derived_from` "
-     "points at the CDSE item this tile mirrors."),
+    (
+        "assets",
+        "VARCHAR",
+        "The item's whole `assets` object as a JSON string, verbatim. Parse it "
+        "with `json_extract` in DuckDB or `JSON.parse` in a browser. It carries "
+        "`file:size`, `proj:transform` and `proj:shape` per band.",
+    ),
+    (
+        "links",
+        _LINKS,
+        "The item's links, reduced to href, rel, title and type. `derived_from` "
+        "points at the CDSE item this tile mirrors.",
+    ),
     ("collection", "VARCHAR", "Always `mosaics`."),
-    ("bbox", "DOUBLE[]",
-     "The item bbox in EPSG:4326, `[west, south, east, north]`. A tile that "
-     "crosses the antimeridian has `west > east`, per RFC 7946."),
-    ("geometry", "GEOMETRY",
-     "The tile footprint in EPSG:4326, as a Polygon, or a MultiPolygon split "
-     "at 180 degrees for tiles that cross the antimeridian. Each edge is "
-     "densified before reprojection, so it follows the true curve of the UTM "
-     "square to under two metres."),
+    (
+        "bbox",
+        "DOUBLE[]",
+        "The item bbox in EPSG:4326, `[west, south, east, north]`. A tile that "
+        "crosses the antimeridian has `west > east`, per RFC 7946.",
+    ),
+    (
+        "geometry",
+        "GEOMETRY",
+        "The tile footprint in EPSG:4326, as a Polygon, or a MultiPolygon split "
+        "at 180 degrees for tiles that cross the antimeridian. Each edge is "
+        "densified before reprojection, so it follows the true curve of the UTM "
+        "square to under two metres.",
+    ),
 ]
 
 # What normalize() emits: geometry travels as GeoJSON text through the
@@ -163,8 +218,20 @@ DATA_COLUMNS = [c for c in COLUMNS if c[0] != "geometry"]
 ROW_KEYS = [c[0] for c in DATA_COLUMNS] + ["_geometry_json"]
 
 QUARTER_MONTHS = {"Q1": (1, 3), "Q2": (4, 6), "Q3": (7, 9), "Q4": (10, 12)}
-_LAST_DAY = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
-             7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}
+_LAST_DAY = {
+    1: 31,
+    2: 28,
+    3: 31,
+    4: 30,
+    5: 31,
+    6: 30,
+    7: 31,
+    8: 31,
+    9: 30,
+    10: 31,
+    11: 30,
+    12: 31,
+}
 
 
 def quarter_window(year: int, quarter: str) -> tuple[str, str]:
@@ -174,8 +241,10 @@ def quarter_window(year: int, quarter: str) -> tuple[str, str]:
     so no quarter boundary is ever a leap day. The table above is enough.
     """
     first, last = QUARTER_MONTHS[quarter]
-    return (f"{year:04d}-{first:02d}-01T00:00:00Z",
-            f"{year:04d}-{last:02d}-{_LAST_DAY[last]:02d}T23:59:59Z")
+    return (
+        f"{year:04d}-{first:02d}-01T00:00:00Z",
+        f"{year:04d}-{last:02d}-{_LAST_DAY[last]:02d}T23:59:59Z",
+    )
 
 
 def split_id(item_id: str) -> tuple[int, str, str]:
@@ -204,9 +273,15 @@ def normalize(item: dict) -> dict:
         "collection": item["collection"],
         "bbox": item["bbox"],
         "assets": json.dumps(assets, separators=(",", ":")),
-        "links": [{"href": l.get("href"), "rel": l.get("rel"),
-                   "title": l.get("title"), "type": l.get("type")}
-                  for l in item.get("links", [])],
+        "links": [
+            {
+                "href": link.get("href"),
+                "rel": link.get("rel"),
+                "title": link.get("title"),
+                "type": link.get("type"),
+            }
+            for link in item.get("links", [])
+        ],
         "_geometry_json": json.dumps(item["geometry"], separators=(",", ":")),
     }
     for band in BANDS:
@@ -227,14 +302,16 @@ def table_columns() -> list[dict]:
     DuckDB ones the writer casts to.
     """
     arrow = {
-        "VARCHAR": "string", "DOUBLE": "double", "GEOMETRY": "geometry",
-        "VARCHAR[]": "list<string>", "DOUBLE[]": "list<double>",
-        "INTEGER[]": "list<int32>", _TS: "timestamp[us, tz=UTC]",
-        _LINKS: "list<struct<href: string, rel: string, title: string, "
-                "type: string>>",
+        "VARCHAR": "string",
+        "DOUBLE": "double",
+        "GEOMETRY": "geometry",
+        "VARCHAR[]": "list<string>",
+        "DOUBLE[]": "list<double>",
+        "INTEGER[]": "list<int32>",
+        _TS: "timestamp[us, tz=UTC]",
+        _LINKS: "list<struct<href: string, rel: string, title: string, type: string>>",
     }
-    return [{"name": n, "type": arrow[t], "description": d}
-            for n, t, d in COLUMNS]
+    return [{"name": n, "type": arrow[t], "description": d} for n, t, d in COLUMNS]
 
 
 if __name__ == "__main__":

@@ -29,7 +29,6 @@ out of the real catalog.
 
 It never deletes.
 """
-from __future__ import annotations
 
 import argparse
 import os
@@ -39,7 +38,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from publish import (  # noqa: E402
-    Upload, content_type_for, load_config, path_style, split_s3_uri, to_direct,
+    Upload,
+    content_type_for,
+    load_config,
+    path_style,
+    split_s3_uri,
+    to_direct,
 )
 from upload_data import is_data_publishable  # noqa: E402
 
@@ -64,8 +68,9 @@ PART_MB = 64
 CONCURRENCY = 16
 
 
-def plan_uploads(data_dir: Path, files: list[str], prefix: str,
-                 key_prefix: str = "") -> list[Upload]:
+def plan_uploads(
+    data_dir: Path, files: list[str], prefix: str, key_prefix: str = ""
+) -> list[Upload]:
     """One Upload per file. A file outside --data-dir, missing, or with a
     suffix the allow-list refuses stops the run before anything moves."""
     base = data_dir.resolve()
@@ -79,12 +84,12 @@ def plan_uploads(data_dir: Path, files: list[str], prefix: str,
             sys.exit(f"{name}: not under --data-dir {base}")
         if not path.is_file():
             sys.exit(f"{name}: no such file under {base}")
-        if not (is_data_publishable(rel)
-                or rel.suffix.lower() in EXTRA_SUFFIXES):
+        if not (is_data_publishable(rel) or rel.suffix.lower() in EXTRA_SUFFIXES):
             sys.exit(f"{name}: not a publishable data file")
         parts = [p for p in (prefix, key_prefix.strip("/")) if p]
-        uploads.append(Upload(path, "/".join(parts + [rel.as_posix()]),
-                              content_type_for(path)))
+        uploads.append(
+            Upload(path, "/".join(parts + [rel.as_posix()]), content_type_for(path))
+        )
     return uploads
 
 
@@ -94,13 +99,17 @@ def remote_size(client, bucket: str, key: str) -> int | None:
         return int(client.head_object(Bucket=bucket, Key=key)["ContentLength"])
     except client.exceptions.ClientError as exc:
         if exc.response.get("Error", {}).get("Code", "") in (
-                "404", "NoSuchKey", "NotFound"):
+            "404",
+            "NoSuchKey",
+            "NotFound",
+        ):
             return None
         raise
 
 
-def upload_one(client, bucket: str, upload: Upload, force: bool,
-               dry_run: bool = False) -> str:
+def upload_one(
+    client, bucket: str, upload: Upload, force: bool, dry_run: bool = False
+) -> str:
     local = upload.local.stat().st_size
     have = remote_size(client, bucket, upload.key)
     if have == local and not force:
@@ -111,24 +120,34 @@ def upload_one(client, bucket: str, upload: Upload, force: bool,
         print(f"  would put s3://{bucket}/{upload.key} ({local:,} bytes, {state})")
         return "would upload"
     from boto3.s3.transfer import TransferConfig
-    print(f"  put       s3://{bucket}/{upload.key} ({local:,} bytes, {state})",
-          flush=True)
+
+    print(
+        f"  put       s3://{bucket}/{upload.key} ({local:,} bytes, {state})", flush=True
+    )
     client.upload_file(
-        str(upload.local), bucket, upload.key,
+        str(upload.local),
+        bucket,
+        upload.key,
         ExtraArgs={"ContentType": upload.content_type},
-        Config=TransferConfig(multipart_chunksize=PART_MB << 20,
-                              multipart_threshold=PART_MB << 20,
-                              max_concurrency=CONCURRENCY))
+        Config=TransferConfig(
+            multipart_chunksize=PART_MB << 20,
+            multipart_threshold=PART_MB << 20,
+            max_concurrency=CONCURRENCY,
+        ),
+    )
     after = remote_size(client, bucket, upload.key)
     if after != local:
-        sys.exit(f"  {upload.key}: uploaded {local:,} bytes but the bucket "
-                 f"reports {after}; not counting it as published")
+        sys.exit(
+            f"  {upload.key}: uploaded {local:,} bytes but the bucket "
+            f"reports {after}; not counting it as published"
+        )
     print(f"  done      {upload.key}", flush=True)
     return "uploaded"
 
 
-def make_client(profile: str, region: str | None, endpoint: str | None,
-                bucket: str = ""):
+def make_client(
+    profile: str, region: str | None, endpoint: str | None, bucket: str = ""
+):
     """The S3 client every upload here goes through.
 
     The endpoint is passed explicitly so that where the bytes land does
@@ -138,34 +157,53 @@ def make_client(profile: str, region: str | None, endpoint: str | None,
     path-style: a dotted name cannot be a virtual host under https.
     """
     import boto3
+
     kwargs = {}
     if path_style(bucket):
         from botocore.config import Config
+
         kwargs["config"] = Config(s3={"addressing_style": "path"})
-    return boto3.Session(profile_name=profile, region_name=region or None
-                         ).client("s3", endpoint_url=endpoint or None,
-                                  **kwargs)
+    return boto3.Session(profile_name=profile, region_name=region or None).client(
+        "s3", endpoint_url=endpoint or None, **kwargs
+    )
 
 
 def main(argv: list[str] | None = None, client=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--data-dir", required=True,
-                    help="the staging tree; each file's key is its path below it")
-    ap.add_argument("--profile",
-                    default=os.environ.get("AWS_PROFILE") or DEFAULT_PROFILE,
-                    help=f"AWS profile (default: $AWS_PROFILE or {DEFAULT_PROFILE})")
-    ap.add_argument("--key-prefix", default="",
-                    help="directory between the catalog prefix and the file's path")
-    ap.add_argument("--force", action="store_true",
-                    help="upload even when the bucket holds an object of the same size")
-    ap.add_argument("--endpoint",
-                    help="S3 endpoint; defaults to endpoint_url in "
-                         "catalog.publish.yaml")
-    ap.add_argument("--via", choices=("direct", "proxy"), default="direct",
-                    help="direct (default): the direct S3 bucket; proxy: "
-                         "the data proxy, as the config writes it")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="HEAD only; print what would upload")
+    ap.add_argument(
+        "--data-dir",
+        required=True,
+        help="the staging tree; each file's key is its path below it",
+    )
+    ap.add_argument(
+        "--profile",
+        default=os.environ.get("AWS_PROFILE") or DEFAULT_PROFILE,
+        help=f"AWS profile (default: $AWS_PROFILE or {DEFAULT_PROFILE})",
+    )
+    ap.add_argument(
+        "--key-prefix",
+        default="",
+        help="directory between the catalog prefix and the file's path",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="upload even when the bucket holds an object of the same size",
+    )
+    ap.add_argument(
+        "--endpoint",
+        help="S3 endpoint; defaults to endpoint_url in catalog.publish.yaml",
+    )
+    ap.add_argument(
+        "--via",
+        choices=("direct", "proxy"),
+        default="direct",
+        help="direct (default): the direct S3 bucket; proxy: "
+        "the data proxy, as the config writes it",
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="HEAD only; print what would upload"
+    )
     ap.add_argument("files", nargs="+", help="files under --data-dir")
     a = ap.parse_args(argv)
 
@@ -176,17 +214,23 @@ def main(argv: list[str] | None = None, client=None) -> int:
     uploads = plan_uploads(Path(a.data_dir), a.files, prefix, a.key_prefix)
     suffix = a.key_prefix.strip("/")
     endpoint = a.endpoint or config.get("endpoint_url")
-    print(f"profile: {a.profile}; endpoint: {endpoint or '(aws default)'}; "
-          f"target: s3://{bucket}/{prefix}{'/' + suffix if suffix else ''}")
+    print(
+        f"profile: {a.profile}; endpoint: {endpoint or '(aws default)'}; "
+        f"target: s3://{bucket}/{prefix}{'/' + suffix if suffix else ''}"
+    )
     if client is None:
-        client = make_client(a.profile, config.get("region"),
-                             a.endpoint or config.get("endpoint_url"),
-                             bucket)
+        client = make_client(
+            a.profile,
+            config.get("region"),
+            a.endpoint or config.get("endpoint_url"),
+            bucket,
+        )
     outcomes = [upload_one(client, bucket, u, a.force, a.dry_run) for u in uploads]
-    print(f"{len(outcomes)} file(s): {outcomes.count('uploaded')} uploaded, "
-          f"{outcomes.count('skipped')} skipped"
-          + (f", {outcomes.count('would upload')} would upload"
-             if a.dry_run else ""))
+    print(
+        f"{len(outcomes)} file(s): {outcomes.count('uploaded')} uploaded, "
+        f"{outcomes.count('skipped')} skipped"
+        + (f", {outcomes.count('would upload')} would upload" if a.dry_run else "")
+    )
     return 0
 
 

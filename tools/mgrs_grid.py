@@ -72,7 +72,6 @@ the MultiPolygon that CDSE publishes for the same tiles. A GeoJSON bbox
 that crosses the antimeridian has `west > east` (RFC 7946 section 5.2),
 and `bbox_of()` returns it that way.
 """
-from __future__ import annotations
 
 import functools
 import math
@@ -85,7 +84,7 @@ from shapely.ops import unary_union
 # The mosaic tile: 10,008 pixels of 10 m.
 TILE_PX = 10_008
 GSD = 10.0
-TILE_M = TILE_PX * GSD          # 100,080 m
+TILE_M = TILE_PX * GSD  # 100,080 m
 
 # Vertices per tile edge before the WGS84 transform. See "Footprints".
 EDGE_SEGMENTS = 10
@@ -97,12 +96,16 @@ _COLUMN_SETS = ("ABCDEFGH", "JKLMNPQR", "STUVWXYZ")
 _ROW_LETTERS = "ABCDEFGHJKLMNPQRSTUV"
 _BANDS = "CDEFGHJKLMNPQRSTUVWX"
 
-TILE_RE = re.compile(r"^(?P<zone>[0-9]{1,2})(?P<band>[C-HJ-NP-X])"
-                     r"(?P<col>[A-HJ-NP-Z])(?P<row>[A-HJ-NP-V])"
-                     r"_(?P<i>[0-9]+)_(?P<j>[0-9]+)$")
+TILE_RE = re.compile(
+    r"^(?P<zone>[0-9]{1,2})(?P<band>[C-HJ-NP-X])"
+    r"(?P<col>[A-HJ-NP-Z])(?P<row>[A-HJ-NP-V])"
+    r"_(?P<i>[0-9]+)_(?P<j>[0-9]+)$"
+)
 # The same, without the _i_j: the bare MGRS cell.
-CELL_RE = re.compile(r"^(?P<zone>[0-9]{1,2})(?P<band>[C-HJ-NP-X])"
-                     r"(?P<col>[A-HJ-NP-Z])(?P<row>[A-HJ-NP-V])$")
+CELL_RE = re.compile(
+    r"^(?P<zone>[0-9]{1,2})(?P<band>[C-HJ-NP-X])"
+    r"(?P<col>[A-HJ-NP-Z])(?P<row>[A-HJ-NP-V])$"
+)
 
 
 class TileError(ValueError):
@@ -141,8 +144,9 @@ def band_latitudes(band: str) -> tuple[float, float]:
 
 @functools.lru_cache(maxsize=256)
 def _to_wgs84(epsg: int) -> Transformer:
-    return Transformer.from_crs(CRS.from_epsg(epsg), CRS.from_epsg(4326),
-                                always_xy=True)
+    return Transformer.from_crs(
+        CRS.from_epsg(epsg), CRS.from_epsg(4326), always_xy=True
+    )
 
 
 def square_corner(zone: int, band: str, col: str, row: str) -> tuple[int, int, int]:
@@ -159,7 +163,8 @@ def square_corner(zone: int, band: str, col: str, row: str) -> tuple[int, int, i
     except ValueError:
         raise TileError(
             f"zone {zone} has no column letter {col!r} "
-            f"(its set is {_COLUMN_SETS[(zone - 1) % 3]})") from None
+            f"(its set is {_COLUMN_SETS[(zone - 1) % 3]})"
+        ) from None
     shift = 5 if zone % 2 == 0 else 0
     base = ((_ROW_LETTERS.index(row) - shift) % 20) * 100_000
 
@@ -205,10 +210,14 @@ def proj_bbox(tile: str) -> list[float]:
 
 def _ring(ulx: float, uly: float, segments: int) -> list[tuple[float, float]]:
     """The tile square as a closed ring, each edge cut into `segments`."""
-    corners = [(ulx, uly), (ulx + TILE_M, uly),
-               (ulx + TILE_M, uly - TILE_M), (ulx, uly - TILE_M)]
+    corners = [
+        (ulx, uly),
+        (ulx + TILE_M, uly),
+        (ulx + TILE_M, uly - TILE_M),
+        (ulx, uly - TILE_M),
+    ]
     pts = []
-    for a, b in zip(corners, corners[1:] + corners[:1]):
+    for a, b in zip(corners, corners[1:] + corners[:1], strict=True):
         for s in range(segments):
             t = s / segments
             pts.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
@@ -235,20 +244,22 @@ def _unwrap(lons: list[float]) -> list[float]:
 def footprint(tile: str, segments: int = EDGE_SEGMENTS) -> Polygon | MultiPolygon:
     """The tile's WGS84 footprint, split at the antimeridian if it crosses."""
     epsg, ulx, uly = origin(tile)
-    xs, ys = zip(*_ring(ulx, uly, segments))
+    xs, ys = zip(*_ring(ulx, uly, segments), strict=True)
     lons, lats = _to_wgs84(epsg).transform(xs, ys)
     lons = _unwrap(list(lons))
-    poly = Polygon(zip(lons, lats))
+    poly = Polygon(zip(lons, lats, strict=True))
     if not poly.is_valid:
         poly = poly.buffer(0)
     west, _, east, _ = poly.bounds
     if west >= -180.0 and east <= 180.0:
         return poly
     parts = []
-    for k in range(math.floor((west + 180.0) / 360.0),
-                   math.floor((east + 180.0) / 360.0) + 1):
-        piece = poly.intersection(box(-180.0 + 360.0 * k, -90.0,
-                                      180.0 + 360.0 * k, 90.0))
+    for k in range(
+        math.floor((west + 180.0) / 360.0), math.floor((east + 180.0) / 360.0) + 1
+    ):
+        piece = poly.intersection(
+            box(-180.0 + 360.0 * k, -90.0, 180.0 + 360.0 * k, 90.0)
+        )
         if piece.is_empty:
             continue
         parts.append(_translate(piece, -360.0 * k))
@@ -260,6 +271,7 @@ def _translate(geom, xoff: float):
     if xoff == 0.0:
         return geom
     from shapely.affinity import translate
+
     return translate(geom, xoff=xoff)
 
 
@@ -274,9 +286,9 @@ def bbox_of(geom) -> list[float]:
     west, south, east, north = geom.bounds
     if isinstance(geom, MultiPolygon) and len(geom.geoms) > 1:
         lons = [x for g in geom.geoms for x, _ in g.exterior.coords]
-        if any(l > 0 for l in lons) and any(l < 0 for l in lons):
-            west = min(l for l in lons if l >= 0)
-            east = max(l for l in lons if l < 0)
+        if any(lon > 0 for lon in lons) and any(lon < 0 for lon in lons):
+            west = min(lon for lon in lons if lon >= 0)
+            east = max(lon for lon in lons if lon < 0)
     return [round(west, 7), round(south, 7), round(east, 7), round(north, 7)]
 
 
@@ -286,8 +298,9 @@ def _round(obj, places: int):
     return round(obj, places)
 
 
-def geometry_of(tile: str, segments: int = EDGE_SEGMENTS,
-                places: int = 6) -> tuple[dict, list[float]]:
+def geometry_of(
+    tile: str, segments: int = EDGE_SEGMENTS, places: int = 6
+) -> tuple[dict, list[float]]:
     """(GeoJSON geometry, bbox) for one tile id.
 
     Coordinates are rounded to `places` decimals -- six is about 11 cm,
@@ -311,6 +324,7 @@ def check_fixtures(path: str | None = None) -> int:
     number that disagree, and prints each one."""
     import json
     import pathlib
+
     src = pathlib.Path(path or pathlib.Path(__file__).with_name("grid_fixtures.json"))
     fixtures = json.loads(src.read_text())
     bad = 0
@@ -325,4 +339,5 @@ def check_fixtures(path: str | None = None) -> int:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(1 if check_fixtures() else 0)
