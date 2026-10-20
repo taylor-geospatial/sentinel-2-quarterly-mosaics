@@ -127,7 +127,8 @@ Pixels are stored as `int16` reflectance values multiplied by 10000.
 Apply the 0.0001 scale to recover reflectance.
 The GeoTIFF has no scale tag.
 Nodata is `-32768`.
-Test against that value when masking; zero is valid, and the integer raster cannot store NaN.
+Test against that value when masking.
+Zero is a valid reflectance value.
 
 The 2024 Q2 measurement found 119 distinct `EPSG:326xx`/`EPSG:327xx` codes.
 Each tile uses the UTM zone of its MGRS cell.
