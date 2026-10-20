@@ -2,7 +2,7 @@
 
 This repository maintains the Portolan catalog for `tge-labs/sentinel-2-quarterly-cloudless-mosaics` on Source Cooperative.
 These instructions apply to agents editing the repository.
-The published [catalog agent guide](catalog/AGENTS.md) applies to agents querying the data.
+Agents querying the data use the published [catalog guide](catalog/AGENTS.md).
 
 ## Provenance
 
@@ -81,5 +81,5 @@ Keep absolute `vcs` and `issues` links in `catalog/catalog.json`, both naming `t
 Relative links would resolve against the public bucket URL rather than the repository.
 
 The root also has an absolute `self` link, which Portolan schema v0.2.0 recommends (PORTO-CORE-081) and v0.1.1 forbids.
-Every object declares the v0.2.0 schema URI (PORTO-CORE-009).
+Keep the v0.2.0 schema URI on all catalog objects (PORTO-CORE-009).
 Do not mix those versions or lower the `rashid` floor below 0.1.8.

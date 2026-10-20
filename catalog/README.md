@@ -1,7 +1,7 @@
 # Sentinel-2 Quarterly Cloudless Mosaics
 
 This catalog describes cloud-free Sentinel-2 composites at 10 m for 36 quarters, from 2017 Q1 through 2025 Q4.
-The four bands comprise 1,017,575 mosaic tiles, 4,070,300 Cloud-Optimized GeoTIFFs, and 607.5 TB.
+The mirror contains 1,017,575 mosaic tiles with four bands each, totaling 4,070,300 Cloud-Optimized GeoTIFFs and 607.5 TB.
 The files are available over HTTPS without a key, account, or request quota.
 
 The European Space Agency produces the [Copernicus Sentinel-2 Global Mosaics](https://documentation.dataspace.copernicus.eu/Data/SentinelMissions/Sentinel2.html) (product `S2MSI_L3__MCQ`), and the Copernicus Data Space Ecosystem publishes them.
@@ -61,7 +61,7 @@ Filter on `year <= 2025` to select the quarters described here.
 
 ## Transfer records
 
-Three prefixes accompany the imagery:
+The bucket also contains:
 
 - `_benchmarks/` held 3,224 fixed-size `.bin` throughput-test files totaling 481.1 GB, counted on 2026-09-28.
   They have no georeferencing but use real tile names, so exclude this prefix from recursive listings, `**/*` globs, and imagery size totals.
@@ -93,7 +93,7 @@ s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/
 
 Set the endpoint to `https://data.source.coop` and use path-style addressing.
 In DuckDB, set `s3_endpoint = 'data.source.coop'` and `s3_url_style = 'path'`.
-No credentials or region are needed.
+You can leave credentials and region unset.
 
 Before Source Cooperative 0.3, the S3 form was `s3://us-west-2.opendata.source.coop/tge-labs/...`, with the account inside a region-named bucket.
 That address still resolved when this guide was written, but use the current form above.
@@ -138,7 +138,7 @@ The European Space Agency produces the Sentinel-2 Global Mosaics.
 Sinergise Solutions runs mosaic production, and CloudFerro operates the Copernicus Data Space Ecosystem infrastructure used for this copy.
 Each collection has a `canonical` link to the upstream [`sentinel-2-global-mosaics`](https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-global-mosaics) collection in the CDSE STAC API.
 
-The four mirrored bands are byte-identical to the source.
+The mirrored B02, B03, B04, and B08 files are byte-identical to the source.
 The mirror omits `observations.tif`, `userdata.json`, and the zipped `Product` asset, so this catalog describes four assets per tile rather than seven.
 Item IDs are unchanged and can be used to locate the upstream records.
 

@@ -16,7 +16,7 @@ The catalog describes quarterly cloud-free Sentinel-2 composites at 10 m for 36 
 
 The European Space Agency produces the Sentinel-2 Global Mosaics, and the Copernicus Data Space Ecosystem publishes them.
 Taylor Geospatial Engine hosts this mirror.
-The four mirrored bands are unchanged, with no filtering, reclassification, or recomputation.
+The mirror preserves B02, B03, B04, and B08 without filtering, reclassification, or recomputation.
 Do not describe this catalog as the source.
 
 ## Published files
@@ -217,7 +217,7 @@ Use `start_datetime` and `end_datetime` for the observation window.
 
 Exclude `_benchmarks/` from imagery listings and size totals.
 It held 3,224 fixed-size `.bin` throughput-test files totaling 481.1 GB, with real tile IDs in their names.
-For example, `_benchmarks/20260922-copy-c128/eodata-transfer-1/Sentinel-2_mosaic_2024_Q2_16QDE_0_0/B02.bin` is a benchmark file.
+The path `_benchmarks/20260922-copy-c128/eodata-transfer-1/Sentinel-2_mosaic_2024_Q2_16QDE_0_0/B02.bin` identifies a benchmark file.
 Recursive listings and `**` globs include these files.
 
 ### 2026 transfers

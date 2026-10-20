@@ -10,7 +10,8 @@ The coverage table provides presence and coverage information without opening ea
 
 ## Table columns
 
-`tiles.parquet` is sorted by tile and quarter, keeping each tile's available history contiguous.
+`tiles.parquet` is sorted by tile and quarter.
+Each tile's available history is contiguous.
 [collection.json](collection.json) lists the columns and types under `table:columns`.
 
 | Column | Meaning |

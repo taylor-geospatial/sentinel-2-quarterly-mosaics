@@ -7,7 +7,7 @@ See the [catalog README](../README.md) for provenance, access, licensing, and co
 ## Tile layout
 
 A mosaic tile is 10008 × 10008 pixels at 10 m, about 100 km square, projected in its MGRS cell's UTM zone.
-Four single-band COGs share a directory:
+Each tile directory contains a single-band COG for B02, B03, B04, and B08:
 
 ```
 2024/Q2/31UFU_0_0/B02.tif

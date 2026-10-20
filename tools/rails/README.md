@@ -32,7 +32,8 @@ The bucket is `tge-labs`, and the object key begins with `sentinel-2-quarterly-c
 `tools/publish.py` rejects the former write-prefix form using bucket `us-west-2.opendata.source.coop` and an account-name prefix.
 
 Clients must use the proxy endpoint.
-Although botocore can read `endpoint_url` from a profile, the repository tools pass the value from `catalog.publish.yaml` explicitly.
+The repository tools pass `endpoint_url` from `catalog.publish.yaml` explicitly.
+Botocore also supports reading it from a profile.
 
 The CLI installer places a static binary in `~/.local/bin` without requiring a Cargo toolchain:
 
@@ -57,7 +58,7 @@ source-coop login --port 8400
 ```
 
 Open the printed URL in the laptop's browser and sign in.
-The redirect to `http://127.0.0.1:8400/callback` travels through the tunnel to the CLI on RAILS.
+The tunnel forwards the redirect to `http://127.0.0.1:8400/callback` to the CLI on RAILS.
 Then write the RAILS profile:
 
 ```ini
@@ -83,7 +84,8 @@ RAILS has no OS keyring, so the CLI stores credentials at `~/.cache/source-coop/
 Log in again when refresh fails.
 
 Use CLI 0.3.0 or newer for login.
-Older builds defaulted `--scope` to `openid` without `offline_access`, preventing a refresh token from being cached.
+Older builds defaulted `--scope` to `openid` without `offline_access`.
+Those builds did not cache a refresh token.
 Those credentials expired after hours and caused later jobs to fail.
 Check `source-coop --version` before login.
 During setup, a 0.2.0 binary in `~/.cargo/bin` shadowed Homebrew's 0.3.0 installation on the maintainer's laptop.

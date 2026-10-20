@@ -72,7 +72,7 @@ WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
 ORDER BY year, quarter;
 ```
 
-### Four bands for one quarter
+### Bands for one quarter
 
 This query reads one manifest.
 
@@ -116,7 +116,7 @@ Use the identifier appropriate to the join.
 
 ## Item index
 
-The index layout sorts rows by `_tile`, `datetime`, and `_subtile` within each quarter's file.
+Rows in each quarter's index are sorted by `_tile`, `datetime`, and `_subtile`.
 The collection's `partition:glob` and `table:columns` describe the paths and columns.
 Check the collection's registered partitions before selecting a quarter.
 No item-index query is documented here until it has been run against the published files.
@@ -126,7 +126,8 @@ No item-index query is documented here until it has been run against the publish
 Pixels are stored as `int16` reflectance values multiplied by 10000.
 Apply the 0.0001 scale to recover reflectance.
 The GeoTIFF has no scale tag.
-Nodata is `-32768`, so neither zero nor NaN is the nodata value, and `value > 0` is an incorrect mask.
+Nodata is `-32768`.
+Test against that value when masking; zero is valid, and the integer raster cannot store NaN.
 
 The 2024 Q2 measurement found 119 distinct `EPSG:326xx`/`EPSG:327xx` codes.
 Each tile uses the UTM zone of its MGRS cell.
@@ -140,7 +141,7 @@ Nodata marks pixels with no cloud-free observations during the quarter.
 Persistently cloudy tropical tiles can have large nodata areas without a transfer failure.
 
 The mirror omits `observations.tif`, which records the number of valid observations per pixel.
-These four bands cannot distinguish a pixel based on 40 observations from one based on 2.
+You cannot infer from these bands whether a pixel is based on 40 observations or 2.
 Use the original CDSE product when observation counts are needed.
 
 ## Antimeridian tiles
