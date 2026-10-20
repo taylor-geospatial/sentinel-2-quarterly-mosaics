@@ -40,8 +40,8 @@ the manifests below when the question includes 2017.
 
 ## Manifest recipes, including 2017
 
-**Which quarters cover this tile.** The coverage table answers this for
-2018–2025. Including 2017 costs a read of all 36 manifests, about 100 MB and
+**Which quarters cover this tile.** Query the coverage table for 2018–2025.
+Including 2017 costs a read of all 36 manifests, about 100 MB and
 roughly several minutes on a domestic connection. Run on 2026-09-28; returns
 36 rows for this tile.
 

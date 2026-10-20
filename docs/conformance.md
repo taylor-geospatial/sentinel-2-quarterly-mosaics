@@ -71,7 +71,7 @@ published; the data asset hashes describe files already in the public bucket.
 ### Data links in a metadata checkout
 
 Data files stay out of git. `CI_LIGHT=1` already exempts data asset hrefs;
-it also exempts a `rel:pmtiles` link when a visual asset declares the exact same
+it also exempts a `rel:pmtiles` link when a visual asset declares the same
 href and both use `application/vnd.pmtiles`. The href must end in `.pmtiles`.
 An undeclared PMTiles link still fails, as do all missing structural links,
 styles and thumbnails. `tests/test_link_contract.py` exercises these boundaries,

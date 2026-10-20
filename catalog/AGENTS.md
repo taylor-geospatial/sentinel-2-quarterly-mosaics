@@ -31,7 +31,7 @@ source.
 
 The imagery is complete and readable now. The coverage table and footprints
 are also published: measured on 2026-10-20, the table has 912,320 rows across
-32 quarters, 2018 Q1 through 2025 Q4. It does not include 2017. See the
+32 quarters, 2018 Q1 through 2025 Q4. Use the manifests for 2017. See the
 [coverage guide](coverage/AGENTS.md) for a tested query and measured limits.
 
 The per-quarter transfer manifests cover the full imagery record:

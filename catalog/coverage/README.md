@@ -65,7 +65,7 @@ Verified against the public files on 2026-10-20:
 
 The collection records sizes and SHA-256 multihashes measured from those
 published bytes. The tileset's `footprints` layer carries `subtile` as a
-string property; use that property to join, rather than the numeric feature id.
+string property; use that property to join.
 
 The 2017 imagery exists in the mirror but is absent from these derivatives.
 Use the 2017 transfer manifests for presence and sizes. A missing coverage row
