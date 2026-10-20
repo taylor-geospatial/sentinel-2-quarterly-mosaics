@@ -1,57 +1,47 @@
-# Portolan Conformance
+# Portolan conformance
 
-Conformance means passing [rashid](https://github.com/portolan-sdi/rashid),
-not claiming to conform, so it runs in CI:
+CI checks this catalog with [rashid](https://github.com/portolan-sdi/rashid).
+Run the same check locally with:
 
 ```bash
 python3 tests/test_conformance.py
 ```
 
-That gate fails on any error-severity finding whose rule is not listed below.
-The list starts empty and it must never grow without a row here. A known
-deviation with an issue number is a debt someone can pay off. A silently
-widened allow-list is a false claim about what this catalog conforms to.
+The check fails on any error-severity finding whose rule is absent from `ACCEPTED` in `tests/test_conformance.py`.
+Each accepted rule requires a row below explaining where it occurs, why it is accepted, and which issue tracks its removal.
 
-## The rashid version floor
+## Validator versions
 
-The gate needs rashid `>=0.1.8,<0.2.0`. It reads `rashid --version` and fails
-outside that range. It also fails when rashid is absent, and prints the install
-command. A skip would report a green run for a catalog that no validator read.
+The conformance check requires rashid `>=0.1.8,<0.2.0`.
+It reads `rashid --version` and fails if the version is outside that range or the tool is absent.
+For a missing installation, it prints the install command.
 
-The floor is 0.1.8 because that is the first rashid that accepts the absolute
-root `self` link Portolan schema v0.2.0 recommends (PORTO-CORE-081). This
-catalog carries that link, so an older rashid fails a root that is correct.
-Rules PTL-LNK-007, PTL-LNK-008, PTL-LNK-009 and PTL-AST-006 arrived in 0.1.5
-and the gate asserts all four; an older rashid reports a pass for a catalog it
-never checked against them. The same range is in the CI install step.
+Rashid 0.1.8 is the first release that accepts the absolute root `self` link recommended by Portolan schema v0.2.0 (PORTO-CORE-081).
+The catalog includes that link.
+The check also asserts rules PTL-LNK-007, PTL-LNK-008, PTL-LNK-009, and PTL-AST-006, introduced in 0.1.5.
+Older versions cannot validate those requirements.
+The development dependencies and CI use the same version range.
 
-The upper bound stops an unreviewed 0.2 rule set from changing what this gate
-means. Raise both bounds together when you move to 0.2, and read the new rules
-first.
-
-This file also records workarounds for the other validator CI runs. Those are
-not conformance debts, because the catalog is correct and the validator is not.
-They live here so nobody has to read CI code to find out why a gate skips
-something.
+The upper bound prevents an unreviewed 0.2 rule set from changing validation behavior.
+Read the new rules and update both bounds when moving to 0.2.
 
 ## Accepted deviations
 
-None. `ACCEPTED` in `tests/test_conformance.py` is still empty, and the section
-below is deliberately not an acceptance.
+There are no accepted deviations.
+`ACCEPTED` in `tests/test_conformance.py` remains empty.
+The validator workarounds below do not add accepted catalog deviations.
 
 ## Coverage derivatives
 
-The former coverage failures are fixed. The public `tiles.parquet` and
-`footprints.pmtiles` were downloaded and measured on 2026-10-20. The table
-has 912,320 rows across 32 quarters, 2018 Q1 through 2025 Q4, and 34,423
-mosaic tiles. The PMTiles metadata reports the same number of footprints.
-The collection now records the measured row count, extent, sizes and checksums.
-2017 imagery is outside the coverage table's extent; the guides state that gap.
+The published `tiles.parquet` and `footprints.pmtiles` were downloaded and measured on 2026-10-20.
+The table contains 912,320 rows across 32 quarters, from 2018 Q1 through 2025 Q4, and 34,423 mosaic tiles.
+The PMTiles metadata reports the same footprint count.
+The collection records the measured row count, extent, sizes, and checksums.
+The coverage guides document that the table excludes 2017 imagery.
 
-The thumbnail is rendered from that table with the collection's default
-quarter-count fill colours, opacity and background, in Web Mercator. It shows
-presence of tiles, not their valid-pixel fraction. Reproduce it with the
-pipeline environment from `tools/rails/environment.yml`:
+The thumbnail renders this table in Web Mercator using the default style's quarter-count fill colors, opacity, and background.
+It shows tile presence rather than valid-pixel fraction.
+Reproduce it with the pipeline environment in `tools/rails/environment.yml`:
 
 ```bash
 mkdir -p .cache/coverage
@@ -61,69 +51,59 @@ curl --fail --location --retry 3 \
 python3 tools/make_coverage_thumbnail.py --source .cache/coverage/tiles.parquet
 ```
 
-The generator prints the source SHA-256, row and tile counts, quarters, and
-thumbnail size and SHA-256. The source used for this thumbnail has SHA-256
-`e413f9c88c6fe8b940fbd207494d1d12d37d0af5b9ceb74275477d7eb10bb38a`.
-Refresh the collection metadata and thumbnail together after a coverage rebuild.
-The new thumbnail omits `file:size` and `file:checksum` until its bytes are
-published; the data asset hashes describe files already in the public bucket.
+The generator prints the source SHA-256, row and tile counts, quarters, and thumbnail size and SHA-256.
+The source used for this thumbnail has SHA-256 `e413f9c88c6fe8b940fbd207494d1d12d37d0af5b9ceb74275477d7eb10bb38a`.
+Refresh the collection metadata and thumbnail together after rebuilding coverage.
+The thumbnail omits `file:size` and `file:checksum` until its bytes are published.
+The data asset hashes describe files already in the public bucket.
 
-### Data links in a metadata checkout
+### Data links in metadata checkouts
 
-Data files stay out of git. `CI_LIGHT=1` already exempts data asset hrefs;
-it also exempts a `rel:pmtiles` link when a visual asset declares the same
-href and both use `application/vnd.pmtiles`. The href must end in `.pmtiles`.
-An undeclared PMTiles link still fails, as do all missing structural links,
-styles and thumbnails. `tests/test_link_contract.py` exercises these boundaries,
-including a structural link disguised with a data suffix.
+Data files remain outside Git.
+`CI_LIGHT=1` exempts data asset hrefs and a `rel:pmtiles` link when a visual asset declares the same href and both use `application/vnd.pmtiles`.
+The href must end in `.pmtiles`.
+Undeclared PMTiles links and missing structural links, styles, or thumbnails still fail.
+`tests/test_link_contract.py` checks these boundaries, including a structural link disguised with a data suffix.
 
 Without `CI_LIGHT`, both the PMTiles link and its asset must exist locally.
-CI checks catalog structure, not remote availability. This changes no Portolan
-rule or validator allow-list; `ACCEPTED` remains empty.
+These CI checks validate catalog structure rather than remote availability.
+They change neither Portolan rules nor the validator allow-list.
 
 <!--
-When you accept one, add a row and a section explaining it, like this:
+When accepting a deviation, add a row and a section explaining it, using this format:
 
 | Rule | Where | Why accepted | Tracking |
 |---|---|---|---|
 | PTL-VIZ-001 | all thumbnails | WebP is not yet permitted; the size saving is 4x | portolan-spec#121 |
 
-Then add the rule id to ACCEPTED in tests/test_conformance.py. Both, or
-neither.
+Add the same rule ID to ACCEPTED in tests/test_conformance.py.
+Both changes are required.
 -->
 
 ## Validator workarounds
 
-### stac-check reports a dialect crash on every collection
+### stac-check dialect error
 
-`tests/test_stac_valid.py` exempts one stac-check failure:
+`tests/test_stac_valid.py` exempts this stac-check failure:
 
 ```
 'list' object has no attribute 'get'
 [Schema: https://schemas.portolan-sdi.org/portolan/vX.Y.Z/schema.json]. Error in Extensions.
 ```
 
-The Portolan schema is valid draft-07, and rashid validates catalogs against it
-cleanly. `stac-validator`, which stac-check uses, hardcodes the JSON Schema
-2020-12 dialect and ignores the `$schema` a schema declares. The profile schema
-uses the draft-07 tuple form of `items` in `valid_bbox`, which means something
-different under 2020-12, so the library raises instead of validating.
+The Portolan schema uses valid draft-07 syntax, which rashid validates successfully.
+The underlying `stac-validator` library uses the JSON Schema 2020-12 dialect and ignores the declared `$schema`.
+It crashes on the draft-07 tuple form of `items` in `valid_bbox`, whose meaning differs under 2020-12.
+The issue is tracked in [stac-check#159](https://github.com/stac-utils/stac-check/issues/159) and [portolan-spec#157](https://github.com/portolan-sdi/portolan-spec/issues/157).
 
-Tracked upstream at <https://github.com/stac-utils/stac-check/issues/159>,
-and on the Portolan side at
-<https://github.com/portolan-sdi/portolan-spec/issues/157>.
+The exemption applies only to the exact message above when the failing schema is a Portolan profile schema.
+Other stac-check errors fail the build.
+The check prints how many objects received the exemption.
 
-The exemption matches that exact message, and only when the failing schema is a
-Portolan profile schema. Every other stac-check error still fails the build,
-and the gate prints how many objects took the exemption.
+The check also fails when stac-check stops reporting this crash for a collection or item declaring the profile schema.
+That failure requests removal of the exemption and this section.
+CI installs stac-check without a version pin so an upstream fix triggers this check.
 
-The exemption expires on its own. The gate fails once stac-check stops emitting
-the crash on a collection or item that declares the profile schema, and tells
-you to delete both the exemption and this section. CI installs stac-check
-unpinned, so the next release triggers that without anyone watching for it.
-
-`tests/test_stac_valid.py` also fails when stac-check is absent, and prints the
-install command. It takes no version floor and no pin. The rashid floor exists
-because that gate asserts four named rules. This gate asserts no stac-check
-rule. It needs the opposite property. A pin holds the exemption open after the
-upstream fix ships.
+If stac-check is absent, the check fails and prints the install command.
+Unlike the rashid check, it asserts no named stac-check rules and sets no version floor.
+A version pin would retain the workaround after an upstream fix.

@@ -1,48 +1,42 @@
 # AGENTS.md — mosaics
 
-Guidance for AI agents and automated clients querying the imagery collection.
+These instructions apply to AI agents and automated clients querying the imagery collection.
+Every claim in this guide must be quoted from a source or measured from the data.
+Do not add a claim without its source or document a query without running it against the published files.
 
-**One rule survives every edit to this file.** Every claim here is either quoted
-from a source or measured from the data. If you cannot point at where a fact
-came from, it does not belong in this file.
+Read the [catalog agent guide](../AGENTS.md) for DuckDB settings, manifest columns, and bucket-level limitations.
 
-Read the [catalog agent guide](../AGENTS.md) first. It carries the two DuckDB
-settings without which these queries fail, the manifest schema, and the
-bucket-level traps. Nothing here repeats them.
+## Published files
 
-## What you can read today
+The imagery record contains 4,070,300 band COGs for 36 quarters, from 2017 Q1 through 2025 Q4.
+Band files use `{year}/{Qn}/{MGRS}_{i}_{j}/{band}.tif`.
+Each completed quarter has a `manifest/manifest_{year}_{Qn}.parquet` and a `_status/{year}/{Qn}/complete.json` marker.
 
-| Thing | Path | Exists? |
-|---|---|---|
-| Band COGs | `{year}/{Qn}/{MGRS}_{i}_{j}/{band}.tif` | yes, 4,070,300 of them |
-| Transfer manifests | `manifest/manifest_{year}_{Qn}.parquet` | yes, 36 |
-| Completion markers | `_status/{year}/{Qn}/complete.json` | yes, 36 |
-| Item index | `mosaics/quarter=YYYY.Qn/items.parquet` | **not yet** |
-| Per-quarter partition items | `mosaics/quarter=YYYY.Qn/YYYY.Qn.json` | **not yet** |
+The public collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
+Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
+Partition items use `quarter=YYYY.Qn/YYYY.Qn.json`, and their indexes use `quarter=YYYY.Qn/items.parquet`.
+The manifest recipes below cover the full 2017–2025 record.
 
-Queries below are grouped by what they need. Nothing is written against
-`items.parquet` while it does not exist.
+## Reading a tile
 
-## Reading a tile without any index
-
-The key is constructible, so the cheapest lookup is no lookup:
+Construct the tile URL directly:
 
 ```python
 def cog_url(year, quarter, subtile, band):
     """quarter is 'Q1'..'Q4'; subtile is like '31UFU_0_0'; band is 'B02'|'B03'|'B04'|'B08'."""
-    return ("https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/"
-            f"{year}/{quarter}/{subtile}/{band}.tif")
+    return (
+        "https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/"
+        f"{year}/{quarter}/{subtile}/{band}.tif"
+    )
 ```
 
-Verified on 2026-09-28: `cog_url(2024, "Q2", "31UFU_0_0", "B04")` returns
-`HTTP/2 200`, `accept-ranges: bytes`, `access-control-allow-origin: *`.
+On 2026-09-28, `cog_url(2024, "Q2", "31UFU_0_0", "B04")` returned `HTTP/2 200`, `accept-ranges: bytes`, and `access-control-allow-origin: *`.
 
-Do not fetch it with a bare `urllib.request.urlopen(...)`. The CDN rejects
-Python's default User-Agent with a 403 that looks like a permissions failure.
-Set any User-Agent of your own, or use `requests`, GDAL or DuckDB, which all
-send one. The catalog agent guide has the measurement.
+Set a User-Agent when using `urllib.request.urlopen(...)`.
+The CDN rejected Python's default User-Agent with HTTP 403 in the tests recorded in the catalog agent guide.
+`requests`, GDAL, and DuckDB send their own User-Agent.
 
-Read a window without downloading the tile:
+Read a window without downloading the full tile:
 
 ```bash
 gdal_translate -srcwin 4000 4000 1024 1024 \
@@ -50,19 +44,17 @@ gdal_translate -srcwin 4000 4000 1024 1024 \
   window.tif
 ```
 
-Set `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR`. Without it GDAL lists the
-containing directory on every open, which on this bucket is a wasted round trip
-against a prefix with a million siblings.
+Set `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR` to avoid directory-listing requests when opening files.
 
-## Available now: queries against the manifests
+## Manifest queries
 
-The manifests are the authority on what exists until the item index publishes.
-Each is a single 2.8 MB Parquet row group, so every query reads the whole file
-and no predicate prunes anything. Budget accordingly.
+Each manifest is a single Parquet row group of about 2.8 MB.
+The queries below were tested against the published manifests.
 
-**Every quarter a tile appears in, with its URL.** Run on 2026-09-28; returns
-36 rows for this tile, 2017 Q1 through 2025 Q4. Expect several minutes: the
-glob pulls all 36 manifests, about 100 MB, and none of them can be pruned.
+### Tile history
+
+This query returned 36 rows on 2026-09-28, covering 2017 Q1 through 2025 Q4.
+Reading the manifests took several minutes on a domestic connection and transferred about 100 MB.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -80,7 +72,9 @@ WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
 ORDER BY year, quarter;
 ```
 
-**All four bands of one tile for one quarter.** One file, so this is fast.
+### Four bands for one quarter
+
+This query reads one manifest.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -94,8 +88,9 @@ WHERE item_id = 'Sentinel-2_mosaic_2024_Q2_31UFU_0_0'
 ORDER BY band;
 ```
 
-**What a quarter holds.** Returns `113088 | 28272 | 16.65` for 2024 Q2, which
-matches that quarter's completion marker exactly.
+### Quarter totals
+
+For 2024 Q2, the result was `113088 | 28272 | 16.65`, equal to the quarter's completion marker.
 
 ```sql
 SELECT count(*) AS n_cogs,
@@ -104,8 +99,10 @@ SELECT count(*) AS n_cogs,
 FROM read_parquet('https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q2.parquet');
 ```
 
-**Extracting the tile id from the item id.** The item id is
-`Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`, so:
+### Tile identifiers
+
+The item ID follows `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`.
+Extract the mosaic tile and MGRS cell identifiers as follows:
 
 ```sql
 SELECT DISTINCT
@@ -114,54 +111,44 @@ SELECT DISTINCT
 FROM read_parquet('https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q2.parquet');
 ```
 
-Run on 2024 Q2 this gives 28,272 distinct `subtile` values and 28,204 distinct
-`mgrs_tile` values. The two are not interchangeable.
+For 2024 Q2, this produced 28,272 distinct `subtile` values and 28,204 distinct `mgrs_tile` values.
+Use the identifier appropriate to the join.
 
-## Available after the backfill
+## Item index
 
-Once `quarter=YYYY.Qn/items.parquet` publishes, the same questions are answered
-by a range read instead of a full download, because the file is sorted
-tile-major. The collection's `partition:glob` and `table:columns` describe the
-shape. **Do not write queries against it yet**, and do not assume a column
-exists because `table:columns` lists it: that array is the contract the
-generator writes to, and `table:row_count` being 0 is how you can tell nothing
-has been written.
+The index layout sorts rows by `_tile`, `datetime`, and `_subtile` within each quarter's file.
+The collection's `partition:glob` and `table:columns` describe the paths and columns.
+Check the collection's registered partitions before selecting a quarter.
+No item-index query is documented here until it has been run against the published files.
 
-## Quirks specific to this collection
+## Raster interpretation
 
-**Apply the 0.0001 scale yourself.** `int16` values are reflectance × 10000 and
-the GeoTIFF carries no scale tag. Nothing warns you.
+Pixels are stored as `int16` reflectance values multiplied by 10000.
+Apply the 0.0001 scale to recover reflectance.
+The GeoTIFF has no scale tag.
+Nodata is `-32768`, so neither zero nor NaN is the nodata value, and `value > 0` is an incorrect mask.
 
-**NoData is `-32768`.** Not 0, and not NaN. `value > 0` is the wrong mask.
+The 2024 Q2 measurement found 119 distinct `EPSG:326xx`/`EPSG:327xx` codes.
+Each tile uses the UTM zone of its MGRS cell.
+Check the CRS before combining tiles or computing areas and distances, and reproject tiles with different coordinate systems.
 
-**119 EPSG codes in one quarter.** Measured across 2024 Q2: every tile is in the
-UTM zone of its MGRS cell, giving 119 distinct `EPSG:326xx`/`EPSG:327xx` codes.
-Two adjacent tiles frequently differ. Reproject before any cross-tile
-computation, and never compute area or distance without checking the CRS of the
-tile you are actually in.
+Each pixel is the first quartile of three months of observations.
+`datetime` labels the first instant of the quarter rather than an acquisition time.
+Use `start_datetime` and `end_datetime` for the observation window.
 
-**The composite has no acquisition time.** A pixel is the first quartile of
-three months of observations. `datetime` is the first instant of the quarter, a
-label, not a measurement. Use `start_datetime` and `end_datetime`, and do not
-report the `datetime` as when the image was taken.
+Nodata marks pixels with no cloud-free observations during the quarter.
+Persistently cloudy tropical tiles can have large nodata areas without a transfer failure.
 
-**Empty pixels are meaningful.** Where no cloud-free observation existed in the
-quarter, the pixel is nodata. That is information about cloud persistence, not a
-transfer failure. Persistently cloudy tropical tiles legitimately have large
-nodata areas.
+The mirror omits `observations.tif`, which records the number of valid observations per pixel.
+These four bands cannot distinguish a pixel based on 40 observations from one based on 2.
+Use the original CDSE product when observation counts are needed.
 
-**`observations.tif` is not here.** The upstream band that says how many valid
-observations backed each pixel was not mirrored. You cannot tell a pixel backed
-by 40 observations from one backed by 2. If that distinction matters, go to CDSE
-for the original product.
+## Antimeridian tiles
 
-**Antimeridian tiles exist, and their bboxes look wrong.** Tiles in MGRS zones
-01 and 60 sit either side of 180°. In 2024 Q2, **125 of 28,272 tiles** cross it.
-Each is a MultiPolygon split at 180° rather than a wrapped polygon, and its
-`bbox` has `west > east`, which is what RFC 7946 requires for a geometry that
-crosses the antimeridian.
+MGRS zones 01 and 60 lie on either side of 180°.
+In 2024 Q2, 125 of 28,272 tiles crossed the antimeridian.
+Their geometry is a MultiPolygon split at 180°, and their `bbox` has `west > east`, as specified by RFC 7946 for antimeridian-crossing bounds.
 
-That means a filter written as `bbox[0] < x AND x < bbox[2]` silently drops
-every one of those 125 tiles, and a bounds check that asserts `west <= east`
-will reject them as malformed. Neither raises an error. Handle the wrap
-explicitly, or exclude zones 01 and 60 knowingly rather than by accident.
+The filter `bbox[0] < x AND x < bbox[2]` excludes those 125 tiles.
+A check requiring `west <= east` rejects their bounds.
+Handle longitude wrapping explicitly, or document the exclusion of zones 01 and 60.

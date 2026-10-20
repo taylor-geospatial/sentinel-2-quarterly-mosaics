@@ -1,110 +1,105 @@
 # AGENTS.md — Sentinel-2 Quarterly Cloudless Mosaics
 
-Guidance for AI agents and automated clients working with this catalog.
+These instructions apply to AI agents and automated clients querying the catalog.
+Every claim in this guide must be quoted from a source or measured from the data.
+Do not add a claim without its source, or document a query without running it against the published files.
 
-**One rule survives every edit to this file.** Every claim here is either quoted
-from a source or measured from the data. If you cannot point at where a fact
-came from, it does not belong in this file. An agent acting on an invented join
-key or an invented column name produces a confident wrong answer, and nothing
-downstream catches it.
+## Catalog contents
 
-## What this catalog holds
+The public root is `https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/catalog.json`.
+The catalog describes quarterly cloud-free Sentinel-2 composites at 10 m for 36 quarters, from 2017 Q1 through 2025 Q4.
 
-Public root:
-`https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/catalog.json`
+- `mosaics` contains 1,017,575 mosaic tiles, 4,070,300 single-band Cloud-Optimized GeoTIFFs, and 607.5 TB.
+  Read the [mosaics guide](mosaics/AGENTS.md) before querying it.
+- `coverage` contains per-tile, per-quarter statistics and tile footprints.
+  Read the [coverage guide](coverage/AGENTS.md) before querying it.
 
-Quarterly cloud-free Sentinel-2 composites at 10 m, 36 quarters from 2017 Q1
-through 2025 Q4. Two collections:
+The European Space Agency produces the Sentinel-2 Global Mosaics, and the Copernicus Data Space Ecosystem publishes them.
+Taylor Geospatial Engine hosts this mirror.
+The four mirrored bands are unchanged, with no filtering, reclassification, or recomputation.
+Do not describe this catalog as the source.
 
-- **`mosaics`** — the imagery. 1,017,575 mosaic tiles, 4,070,300 single-band
-  Cloud-Optimized GeoTIFFs, 607.5 TB. Read
-  [`mosaics/AGENTS.md`](mosaics/AGENTS.md) before querying it.
-- **`coverage`** — per-tile, per-quarter statistics and tile footprints. Read
-  [`coverage/AGENTS.md`](coverage/AGENTS.md).
+## Published files
 
-This is a **mirror**. The European Space Agency produces the Sentinel-2 Global
-Mosaics and the Copernicus Data Space Ecosystem publishes them. Nothing is
-filtered, reclassified or recomputed here. Do not describe this catalog as the
-source.
+The imagery is complete and readable.
+The public mosaics collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
+Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
+Use the manifests for quarters outside that registered index coverage.
 
-## What exists today, and what does not
+The coverage table and footprints are published.
+Measured on 2026-10-20, the table has 912,320 rows across 32 quarters, from 2018 Q1 through 2025 Q4.
+Use the manifests for 2017.
+The [coverage guide](coverage/AGENTS.md) includes a tested query and measured limits.
 
-The imagery is complete and readable now. The coverage table and footprints
-are also published: measured on 2026-10-20, the table has 912,320 rows across
-32 quarters, 2018 Q1 through 2025 Q4. Use the manifests for 2017. See the
-[coverage guide](coverage/AGENTS.md) for a tested query and measured limits.
-
-The per-quarter transfer manifests cover the full imagery record:
+The 36 per-quarter manifests for 2017–2025 cover the full imagery record described by this catalog:
 
 ```
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_{year}_{Qn}.parquet
 ```
 
-Thirty-six of them, one per finished quarter. Every recipe below runs against
-those. A recipe that needs `items.parquet` is marked as unavailable, not
-written speculatively.
+The queries below use those manifests.
+The bucket also holds a 2026 Q2 manifest, so unrestricted globs include a quarter outside the catalog's extent.
 
-## Keys are constructible
+## Tile keys
 
-No index lookup is needed to read a tile. The key is:
+A tile can be read without an index lookup using this key:
 
 ```
 {year}/{Qn}/{MGRS}_{i}_{j}/{band}.tif
 ```
 
-with `band` one of `B02`, `B03`, `B04`, `B08`. The STAC item id for the same
-tile is `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`, so the id and the key
-convert to each other with string operations alone.
+The `band` is one of `B02`, `B03`, `B04`, or `B08`.
+The corresponding STAC item ID is `Sentinel-2_mosaic_{YYYY}_Q{n}_{MGRS}_{i}_{j}`.
+String operations convert between the ID and key.
 
-Verified on 2026-09-28, `HTTP/2 200` with `accept-ranges: bytes` and
-`access-control-allow-origin: *`:
+The following URL returned `HTTP/2 200`, `accept-ranges: bytes`, and `access-control-allow-origin: *` on 2026-09-28:
 
 ```
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/2024/Q2/31UFU_0_0/B04.tif
 ```
 
-## Three settings, or your queries fail
+## DuckDB settings
 
-All three were hit and fixed while writing this file. None is optional.
+### S3 endpoint
 
-**1. `SET s3_endpoint = 'data.source.coop'`.** Source Cooperative is a data
-proxy, not a plain S3 bucket. The bucket is the account name, `tge-labs`, and
-the product slug is the key prefix, so an `s3://` read has to be pointed at the
-proxy host. No credentials are needed: the data is public and anonymous reads
-work.
+Set `s3_endpoint = 'data.source.coop'` for S3 reads.
+Source Cooperative uses the account name, `tge-labs`, as the bucket and the product slug as the key prefix.
+Anonymous reads need no credentials.
 
-**2. `SET s3_url_style = 'path'` for every `s3://` read.** The proxy does not
-serve virtual-host-style subdomains, so without this DuckDB invents a hostname
-that does not exist:
+### Path-style addressing
+
+Set `s3_url_style = 'path'` for every S3 read.
+The proxy does not serve virtual-host-style subdomains, and omitting this setting caused the following error:
 
 ```
 IO Error: Could not resolve hostname error for HTTP HEAD to
 'https://tge-labs.data.source.coop/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q2.parquet'
 ```
 
-`SET s3_region` is **not** needed against the proxy. Measured on 2026-09-28: the
-same query succeeds with the region unset and fails with the URL style unset.
+No `s3_region` setting is needed against the proxy.
+On 2026-09-28, the same query succeeded with the region unset and failed with the URL style unset.
 
-**3. Raise `http_timeout`.** Each manifest is a single Parquet row group of
-about 2.8 MB, so any query reads the whole file; there is no column or row-group
-pruning to fall back on. On a slow link the default timeout aborts mid-read and
-DuckDB reports it as corruption rather than as a timeout:
+### HTTP timeout
+
+The manifest queries documented here read files containing one Parquet row group of about 2.8 MB each.
+On a slow connection, the default timeout interrupted reads and produced these errors:
 
 ```
 Invalid Error: Out of buffer
 Invalid Error: TProtocolException: Invalid data
 ```
 
-Neither message means the file is damaged. `SET http_timeout = 600000;` and
-`SET http_retries = 5;` fix it.
+Setting `http_timeout = 600000` and `http_retries = 5` resolved those failures.
+The errors in those tests did not indicate damaged files.
 
 ## Worked queries
 
-Every query below was run against the published files on 2026-09-28, and the
-row counts shown are what came back.
+The following queries ran against the published files on 2026-09-28.
+The reported counts are their measured results.
 
-**One quarter, over `https://`.** DuckDB reads a single named file over HTTPS
-without credentials.
+### One quarter
+
+DuckDB can read a named HTTPS file without credentials.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -117,11 +112,12 @@ SELECT count(*) AS n_cogs,
 FROM read_parquet('https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_2024_Q2.parquet');
 ```
 
-Returns `113088 | 28272 | 16.65`, which matches that quarter's
-`_status/2024/Q2/complete.json` exactly.
+The result was `113088 | 28272 | 16.65`, equal to the values in `_status/2024/Q2/complete.json`.
 
-**More than one quarter: use `s3://`.** DuckDB cannot expand a glob over plain
-`https://`, because it has no way to list. The anonymous S3 door can.
+### Multiple quarters
+
+DuckDB cannot expand an HTTPS glob without a listing service.
+Use anonymous S3 access to expand the glob.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -135,11 +131,9 @@ FROM read_parquet('s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest
 GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 
-Returns `2024 Q1 → 29528` and `2024 Q2 → 28272`, matching both completion
-markers.
+The results were `2024 Q1 → 29528` and `2024 Q2 → 28272`, equal to both completion markers.
 
-**One tile through all 36 quarters, with the URL to read.** This is the query
-the catalog exists to make cheap.
+### One tile across 36 quarters
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -157,16 +151,14 @@ WHERE item_id LIKE '%_31UFU_0_0' AND band = 'B04'
 ORDER BY year, quarter;
 ```
 
-Returns 36 rows, one per quarter, 2017 Q1 through 2025 Q4. It took about
-several minutes on a domestic connection, because the glob pulls all 36 manifests
-(roughly 100 MB) and none of them can be pruned. Cache the result rather than
-running it twice. `coverage/tiles.parquet` provides the 2018–2025 portion in
-one table; retain the manifest query when the question includes 2017.
+The query returned 36 rows, one per quarter from 2017 Q1 through 2025 Q4.
+It took several minutes on a domestic connection, reading roughly 100 MB of manifests.
+Cache the result when repeating the analysis.
+`coverage/tiles.parquet` provides the 2018–2025 portion in one table, but use the manifest query for 2017.
 
-## The manifest schema
+## Manifest columns
 
-Measured with `DESCRIBE` against
-`manifest/manifest_2024_Q2.parquet` on 2026-09-28.
+The column definitions were measured with `DESCRIBE` on `manifest/manifest_2024_Q2.parquet` on 2026-09-28.
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -180,10 +172,8 @@ Measured with `DESCRIBE` against
 | `destination_bucket` | `VARCHAR` | Always `tge-labs` |
 | `destination_key` | `VARCHAR` | The key here, without a leading slash |
 
-A public URL is
-`'https://data.source.coop/' || destination_bucket || '/' || destination_key`.
-There is **no geometry column**: the manifests are a transfer record, not a
-spatial index.
+Construct the public URL as `'https://data.source.coop/' || destination_bucket || '/' || destination_key`.
+The manifests record transfers and have no geometry column.
 
 ## Join keys
 
@@ -194,86 +184,83 @@ spatial index.
 | `coverage` | `subtile` | `footprints.pmtiles` | `subtile` property | many table rows per footprint |
 | `mosaics` index | `_tile` | MGRS grid | cell id | not unique |
 
-**`_tile` and `_subtile` are different things and mixing them loses rows.**
-`_tile` is the MGRS cell, `31UFU`. `_subtile` is the mosaic tile,
-`31UFU_0_0`. One MGRS cell can carry more than one mosaic tile: in 2024 Q2,
-28,272 mosaic tiles sit in 28,204 distinct MGRS cells, so 68 cells carry more
-than one. Join on `_subtile` unless you actually mean the grid cell.
+`_tile` identifies an MGRS cell, such as `31UFU`, and `_subtile` identifies a mosaic tile, such as `31UFU_0_0`.
+The 2024 Q2 measurement counted 28,272 mosaic tiles in 28,204 distinct MGRS cells and reported 68 cells with more than one tile.
+Join on `_subtile` unless the analysis requires MGRS cells.
 
-## Quirks that produce silently wrong answers
+## Data interpretation
 
-**The reflectance scale is not in the file.** Pixels are `int16` scaled by
-10000. Multiply by 0.0001. GDAL reports no scale factor, so nothing warns you:
-you get plausible-looking values around 1000 instead of 0.1 and no error.
+### Reflectance and nodata
 
-**Nodata is `-32768`, not 0.** Zero is a legitimate reflectance value. A mask
-built as `value > 0` throws away real dark pixels and keeps nothing it should.
+Pixels are `int16` values scaled by 10000.
+Multiply by 0.0001 to obtain reflectance.
+GDAL reports no scale factor, so unapplied scaling yields values such as 1000 instead of 0.1 without an error.
+
+Nodata is `-32768`, and zero is a valid reflectance value.
+A `value > 0` mask discards valid dark pixels.
 Test against `-32768`.
 
-**There is no single CRS.** Every tile is in the UTM zone of its MGRS cell.
-Counting the zones present in 2024 Q2 gives **119 distinct EPSG codes**
-(`EPSG:326xx` north, `EPSG:327xx` south). Any operation across more than one
-tile has to reproject. Do not assume neighbouring tiles share a projection, and
-do not compute an area or a distance without checking which CRS you are in.
+### Coordinate systems
 
-**A quarter is a window, not an instant.** `datetime` on an item is the first
-day of the quarter. It is not an acquisition time, and no single acquisition
-time exists: the pixel is a percentile over three months of observations. Use
-`start_datetime` and `end_datetime`.
+Each tile uses the UTM zone of its MGRS cell.
+The 2024 Q2 measurements found 119 distinct EPSG codes, using `EPSG:326xx` in the north and `EPSG:327xx` in the south.
+Check the CRS before combining tiles or computing areas and distances, and reproject tiles with different coordinate systems.
+Do not assume neighboring tiles share a projection.
 
-**`_benchmarks/` is not imagery.** 3,224 fixed-size `.bin` files from throughput
-tests, 481.1 GB, named after real tile ids, for example
-`_benchmarks/20260922-copy-c128/eodata-transfer-1/Sentinel-2_mosaic_2024_Q2_16QDE_0_0/B02.bin`.
-A recursive listing or a `**` glob picks them up and a naive size total counts
-them as data. Exclude the prefix.
+### Dates
 
-**A glob over the manifests now matches 37 files, not 36.** `2026/Q2/` finished
-transferring on 2026-09-28 at 14:44 UTC, after this catalog's collections were
-written, and it has a completion marker and a `manifest_2026_Q2.parquet`:
-115,572 objects across 28,893 tiles, 17.25 TB. This catalog still describes 36
-quarters, 2017 Q1 through 2025 Q4. So `manifest_*.parquet` silently returns a
-quarter the collections do not cover. **Filter on `year <= 2025`** when you mean
-the described record. Every glob recipe above does.
+An item's `datetime` labels the first day of the quarter.
+Each pixel is a percentile of three months of observations, so it has no single acquisition time.
+Use `start_datetime` and `end_datetime` for the observation window.
 
-**2026 Q2 tiles are built differently.** They use 256 × 256 internal blocks
-where 2017 through 2025 use 1024 × 1024, measured with `gdalinfo` on
-`2026/Q2/31UFU_0_0/B04.tif` on 2026-09-28. Everything else is identical: COG
-layout, DEFLATE with a horizontal predictor, 10008 × 10008, `int16`, nodata
-`-32768`, five overviews. Nothing breaks, but a windowed read costs more,
-smaller range requests for the same pixels. That difference is why the quarter
-is not folded in yet rather than any doubt about the bytes.
+### Benchmark files
 
-**`2026/Q1/` is an unfinished transfer.** 799 objects, no completion marker, no
-manifest. Do not read it as data, and do not treat its absence from a manifest
-glob as evidence the quarter does not exist upstream.
+Exclude `_benchmarks/` from imagery listings and size totals.
+It held 3,224 fixed-size `.bin` throughput-test files totaling 481.1 GB, with real tile IDs in their names.
+For example, `_benchmarks/20260922-copy-c128/eodata-transfer-1/Sentinel-2_mosaic_2024_Q2_16QDE_0_0/B02.bin` is a benchmark file.
+Recursive listings and `**` globs include these files.
 
-**Python's `urllib` gets 403 on public objects.** The CDN in front of this
-bucket rejects the default `Python-urllib/3.x` User-Agent with
-`HTTP Error 403: Forbidden`, including on objects that are unquestionably
-public. It is not a permissions problem, the object is not missing, and no
-credential will fix it. Measured on 2026-09-28 against
-`_status/2024/Q2/complete.json`: the default User-Agent returns 403 and the
-identical request with `User-Agent: curl/8.0` returns 200.
+### 2026 transfers
+
+`2026/Q2/` finished transferring on 2026-09-28 at 14:44 UTC, after the collections were written.
+Its completion marker and `manifest_2026_Q2.parquet` record 115,572 objects across 28,893 tiles, totaling 17.25 TB.
+The additional manifest brings the documented glob count to 37 files.
+Filter on `year <= 2025` to select the 36 quarters from 2017 Q1 through 2025 Q4 described here.
+
+The 2026 Q2 tiles use 256 × 256 internal blocks, compared with 1024 × 1024 for 2017–2025.
+This difference was measured with `gdalinfo` on `2026/Q2/31UFU_0_0/B04.tif` on 2026-09-28.
+The COG layout, DEFLATE compression, horizontal predictor, 10008 × 10008 dimensions, `int16` type, `-32768` nodata, and five overviews are unchanged.
+Windowed reads request more, smaller byte ranges for the same pixels.
+The quarter remains outside the catalog until this difference is documented in its metadata.
+
+`2026/Q1/` held 799 objects without a completion marker or manifest when inspected.
+Do not use that unfinished transfer as data or interpret its absence from manifest globs as evidence that it is absent upstream.
+
+### Python HTTP requests
+
+On 2026-09-28, the CDN rejected Python's default `Python-urllib/3.x` User-Agent with `HTTP Error 403: Forbidden` on public objects.
+A request for `_status/2024/Q2/complete.json` returned 403 with the default User-Agent and 200 with `User-Agent: curl/8.0`.
+Changing credentials was not needed for that failure.
 
 ```python
 import urllib.request
+
 req = urllib.request.Request(url, headers={"User-Agent": "my-tool/1.0"})
-body = urllib.request.urlopen(req).read()   # any non-default UA works
+body = urllib.request.urlopen(req).read()  # any non-default UA works
 ```
 
-`curl`, DuckDB's `httpfs`, GDAL's `/vsicurl` and `requests` all send their own
-User-Agent and are unaffected, which is why every recipe here works. This only
-bites hand-rolled `urllib` code, and it looks exactly like an access failure
-when it happens.
+`curl`, DuckDB's `httpfs`, GDAL's `/vsicurl`, and `requests` send their own User-Agent and were unaffected.
+Set a User-Agent when using `urllib`.
 
-**A finished quarter is a snapshot, not a permanent record.** Upstream
-reprocesses old quarters, so a quarter copied here can drift from its CDSE
-original. Compare manifests rather than assuming immutability.
+### Upstream revisions
 
-**The upstream band widths are wrong, and this catalog does not copy them.**
-CDSE items publish an `eo:full_width_half_max` for each band that is roughly
-0.54 times the centre wavelength, which is not a spectral bandwidth at all.
-Read on 2026-09-28 from item `Sentinel-2_mosaic_2026_Q2_60XWF_1_0`:
+Upstream reprocesses old quarters, so a copied quarter can differ from the current CDSE product.
+Compare manifests when checking for changes.
+
+### Spectral bandwidths
+
+CDSE's `eo:full_width_half_max` values are roughly 0.54 times each band's center wavelength.
+The following values were read from `Sentinel-2_mosaic_2026_Q2_60XWF_1_0` on 2026-09-28:
 
 | Band | CDSE `full_width_half_max` | ESA mission value | Used here |
 |---|---|---|---|
@@ -282,16 +269,13 @@ Read on 2026-09-28 from item `Sentinel-2_mosaic_2026_Q2_60XWF_1_0`:
 | B04 | 0.342 µm | 0.031 µm | 0.031 µm |
 | B08 | 0.454 µm | 0.115 µm | 0.115 µm |
 
-A 0.342 µm wide "red" band would run from green into the near infrared. This
-catalog publishes the ESA mission bandwidths instead. It is the one field where
-this mirror deliberately disagrees with its source. Do not reconcile it back
-against CDSE.
+A red band 0.342 µm wide would span green through near infrared.
+The catalog uses the ESA mission bandwidths instead of those CDSE values.
+Preserve this documented metadata correction rather than copying the upstream values.
 
-## Structure
+## Links
 
-Assets and structural links resolve relative to the object that carries them.
-The root carries an absolute `self` link, which Portolan schema v0.2.0
-recommends. Collections do not, so a client tracks its own location.
-
-Human-facing pages live under `source.coop`; machine reads go to
-`data.source.coop`. They serve the same objects.
+Assets and structural links resolve relative to the object containing them.
+The root has an absolute `self` link, as recommended by Portolan schema v0.2.0.
+Collections do not have a `self` link, so clients must track their locations.
+Human-facing pages use `source.coop`, and machine reads use `data.source.coop` for the same objects.
