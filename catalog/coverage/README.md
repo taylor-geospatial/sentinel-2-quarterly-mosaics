@@ -23,7 +23,7 @@ a million-object listing or 36 raster opens:
 ## The table
 
 One row per (mosaic tile, quarter), sorted by tile and then quarter, so one
-tile's whole 36-quarter history is contiguous. The full column list with types
+tile's available history is contiguous. The full column list with types
 is in [`collection.json`](collection.json) under `table:columns`; the parts worth
 explaining here:
 
@@ -50,21 +50,33 @@ The geometry is fixed. A client joins the coverage table onto it by `subtile`,
 which means recomputing the statistics never rebuilds the tileset. Tiles that
 cross the antimeridian are split at 180° rather than wrapped.
 
-## Not published yet
+## Published coverage
 
-**Neither data file exists.** `table:row_count` is 0, and both assets are
-declared without `file:size` and `file:checksum` because there are no bytes to
-measure. The schema in `collection.json` is the contract the generator writes
-to, not a description of a file you can read today.
+Verified against the public files on 2026-10-20:
 
-This is deliberate. The alternative — writing plausible sizes and checksums for
-files that do not exist — produces a catalog that fails validation in a way that
-looks like corruption, and there is no way for a reader to tell the difference.
+| Measure | Value |
+|---|---|
+| Table rows | 912,320 |
+| Distinct mosaic tiles | 34,423 |
+| Quarters | 32, from 2018 Q1 through 2025 Q4 |
+| Rows with measured `valid_fraction` | 64,000; the rest are NULL |
+| `tiles.parquet` | 27,763,154 bytes |
+| `footprints.pmtiles` | 13,475,623 bytes; 34,423 features |
 
-Until it lands, the per-quarter transfer manifests at
-`manifest/manifest_{year}_{Qn}.parquet` answer the presence and size questions.
-[`AGENTS.md`](AGENTS.md) shows how, and says plainly which queries do not work
-yet.
+The collection records sizes and SHA-256 multihashes measured from those
+published bytes. The tileset's `footprints` layer carries `subtile` as a
+string property; use that property to join, rather than the numeric feature id.
+
+The 2017 imagery exists in the mirror but is absent from these derivatives.
+Use the 2017 transfer manifests for presence and sizes. A missing coverage row
+outside 2018–2025 does not establish that imagery is missing.
+[`AGENTS.md`](AGENTS.md) includes a tested coverage query and manifest recipes.
+
+The thumbnail shows the number of quarters present per mosaic tile using the
+default style. It shows tile presence, not valid-pixel coverage. Regenerate it
+from the published table with `tools/make_coverage_thumbnail.py` in the source
+repository; [the conformance notes](https://github.com/taylor-geospatial/sentinel-2-quarterly-mosaics/blob/main/docs/conformance.md)
+give the download and render commands.
 
 ## License
 

@@ -29,13 +29,12 @@ source.
 
 ## What exists today, and what does not
 
-The imagery is complete and readable now. The **item index and the coverage
-tables are not published yet**: `mosaics` carries `table:row_count: 0` and
-`partition:file_count: 0`, and the `coverage` data assets are declared without
-`file:size` or `file:checksum` because the bytes do not exist.
+The imagery is complete and readable now. The coverage table and footprints
+are also published: measured on 2026-10-20, the table has 912,320 rows across
+32 quarters, 2018 Q1 through 2025 Q4. It does not include 2017. See the
+[coverage guide](coverage/AGENTS.md) for a tested query and measured limits.
 
-Until they land, the authority on what exists is the per-quarter transfer
-manifests, which **do** exist today:
+The per-quarter transfer manifests cover the full imagery record:
 
 ```
 https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/manifest/manifest_{year}_{Qn}.parquet
@@ -161,8 +160,8 @@ ORDER BY year, quarter;
 Returns 36 rows, one per quarter, 2017 Q1 through 2025 Q4. It took about
 several minutes on a domestic connection, because the glob pulls all 36 manifests
 (roughly 100 MB) and none of them can be pruned. Cache the result rather than
-running it twice. Once `coverage/tiles.parquet` publishes, that collection
-answers the same question from one range read.
+running it twice. `coverage/tiles.parquet` provides the 2018–2025 portion in
+one table; retain the manifest query when the question includes 2017.
 
 ## The manifest schema
 
@@ -192,7 +191,7 @@ spatial index.
 |---|---|---|---|---|
 | manifests | `item_id` | `mosaics` index | `id` | unique per quarter |
 | `mosaics` index | `_subtile` | `coverage` | `subtile` | not unique: one row per quarter |
-| `coverage` | `subtile` | `footprints.pmtiles` | feature id | unique |
+| `coverage` | `subtile` | `footprints.pmtiles` | `subtile` property | many table rows per footprint |
 | `mosaics` index | `_tile` | MGRS grid | cell id | not unique |
 
 **`_tile` and `_subtile` are different things and mixing them loses rows.**

@@ -13,6 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 TESTS = [
+    "test_link_contract.py",
     "test_links.py",
     "test_publish.py",
     "test_upload_data.py",

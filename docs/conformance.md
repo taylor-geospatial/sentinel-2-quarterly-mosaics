@@ -39,28 +39,47 @@ something.
 None. `ACCEPTED` in `tests/test_conformance.py` is still empty, and the section
 below is deliberately not an acceptance.
 
-## Open gaps, not accepted
+## Coverage derivatives
 
-Two gates fail today. Both have the same cause: the `coverage` collection
-declares the structure of data that the backfill has not produced yet. Neither
-is in `ACCEPTED`, because widening the allow-list would turn "this catalog is
-half-built" into "this catalog conforms", and nothing downstream could tell the
-difference.
+The former coverage failures are fixed. The public `tiles.parquet` and
+`footprints.pmtiles` were downloaded and measured on 2026-10-20. The table
+has 912,320 rows across 32 quarters, 2018 Q1 through 2025 Q4, and 34,423
+mosaic tiles. The PMTiles metadata reports the same number of footprints.
+The collection now records the measured row count, extent, sizes and checksums.
+2017 imagery is outside the coverage table's extent; the guides state that gap.
 
-| Gate | Finding | Cause | Closes in |
-|---|---|---|---|
-| `test_links.py` | `coverage/collection.json: rel:pmtiles -> ./footprints.pmtiles does not exist` | The footprints tileset is not built yet. The link is required by PTL-VIZ-003 once the asset is declared, and the link gate has no data-suffix exemption for links, only for assets. | Phase 4, when `footprints.pmtiles` is generated and uploaded |
-| `test_conformance.py` | `PTL-VIZ-001 coverage/collection.json: geospatial collection has no asset with the 'thumbnail' role` | A thumbnail for this collection has to be rendered from its own coverage statistics, which do not exist yet. Rendering something else would misrepresent what the collection shows. | Phase 4, with the styles and thumbnail pass |
+The thumbnail is rendered from that table with the collection's default
+quarter-count fill colours, opacity and background, in Web Mercator. It shows
+presence of tiles, not their valid-pixel fraction. Reproduce it with the
+pipeline environment from `tools/rails/environment.yml`:
 
-`mosaics` passes both gates. Its thumbnail is rendered from published COGs, and
-it declares no visualization derivative it cannot back.
+```bash
+mkdir -p .cache/coverage
+curl --fail --location --retry 3 \
+  https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/coverage/tiles.parquet \
+  --output .cache/coverage/tiles.parquet
+python3 tools/make_coverage_thumbnail.py --source .cache/coverage/tiles.parquet
+```
 
-The alternative was to hold the `coverage` collection out of `catalog/` until
-its bytes exist, which would make CI green today at the cost of publishing no
-contract for the table. Declaring the contract early is worth more than a green
-check on a catalog that is openly mid-build, so long as the failures stay
-visible. When Phase 4 lands, both rows here are deleted, not moved into
-`ACCEPTED`.
+The generator prints the source SHA-256, row and tile counts, quarters, and
+thumbnail size and SHA-256. The source used for this thumbnail has SHA-256
+`e413f9c88c6fe8b940fbd207494d1d12d37d0af5b9ceb74275477d7eb10bb38a`.
+Refresh the collection metadata and thumbnail together after a coverage rebuild.
+The new thumbnail omits `file:size` and `file:checksum` until its bytes are
+published; the data asset hashes describe files already in the public bucket.
+
+### Data links in a metadata checkout
+
+Data files stay out of git. `CI_LIGHT=1` already exempts data asset hrefs;
+it also exempts a `rel:pmtiles` link when a visual asset declares the exact same
+href and both use `application/vnd.pmtiles`. The href must end in `.pmtiles`.
+An undeclared PMTiles link still fails, as do all missing structural links,
+styles and thumbnails. `tests/test_link_contract.py` exercises these boundaries,
+including a structural link disguised with a data suffix.
+
+Without `CI_LIGHT`, both the PMTiles link and its asset must exist locally.
+CI checks catalog structure, not remote availability. This changes no Portolan
+rule or validator allow-list; `ACCEPTED` remains empty.
 
 <!--
 When you accept one, add a row and a section explaining it, like this:

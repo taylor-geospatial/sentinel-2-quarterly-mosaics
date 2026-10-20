@@ -59,7 +59,7 @@ python3 tools/publish.py --force --confirm  # upload; needs AWS credentials
 `--force` is not optional here. Without it, `publish.py` paginates
 `list_objects_v2` over the whole write prefix to work out what changed, and this
 prefix holds over four million objects, so the command appears to hang. `--force`
-skips the listing and re-uploads all 11 catalog files, which at this size is far
+skips the listing and re-uploads all catalog files, which at this size is far
 cheaper than the listing it avoids.
 
 It never deletes. Removing a file from `catalog/` does not unpublish it, so
@@ -69,12 +69,14 @@ delete the object yourself if that is what you meant.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install 'rashid>=0.1.8,<0.2.0' stac-check
-PATH="$PWD/.venv/bin:$PATH" python3 tests/run_all.py
+.venv/bin/pip install 'rashid>=0.1.8,<0.2.0' stac-check boto3 pyflakes
+PATH="$PWD/.venv/bin:$PATH" pyflakes tools/*.py tests/*.py
+CI_LIGHT=1 PATH="$PWD/.venv/bin:$PATH" python3 tests/run_all.py
 ```
 
 | Gate | What it checks |
 |---|---|
+| `test_link_contract.py` | CI data exemptions cannot hide broken structural links |
 | `test_links.py` | Every relative link and asset href resolves |
 | `test_publish.py` | Nothing outside `catalog/` can be uploaded |
 | `test_upload_data.py` | Only staged files with an allowed suffix upload |
@@ -85,8 +87,11 @@ PATH="$PWD/.venv/bin:$PATH" python3 tests/run_all.py
 absolute root `self` link that Portolan schema v0.2.0 recommends. CI installs
 the same range the gate enforces.
 
-Leave `CI_LIGHT` unset locally so the full link check runs. CI sets it, because
-a fresh checkout has the metadata and not the 607 TB the asset hrefs point at.
+Leave `CI_LIGHT` unset when the referenced data files are present locally so
+the full link check runs. For a metadata-only checkout, set `CI_LIGHT=1` as CI
+does. It skips data assets and PMTiles links backed by matching visual assets;
+structural links, styles and thumbnails must still resolve. `boto3` enables
+the publisher's session tests without making network calls or using credentials.
 
 ## License
 

@@ -9,26 +9,41 @@ came from, it does not belong in this file.
 Read the [catalog agent guide](../AGENTS.md) first for the two DuckDB settings
 these queries need and the manifest schema they fall back on.
 
-## Status: nothing here is published yet
+## Published coverage
 
-`tiles.parquet` and `footprints.pmtiles` **do not exist**. The collection
-declares them so the contract is public, with no `file:size` and no
-`file:checksum`, and `table:row_count` is 0.
+Measured against the public files on 2026-10-20: `tiles.parquet` has 912,320
+rows, 34,423 distinct `subtile` values, and 32 quarters from `2018.Q1` through
+`2025.Q4`. There are no duplicate `(subtile, quarter)` pairs. `valid_fraction`
+is measured for 64,000 rows and NULL for the rest.
 
-You can tell this is the real state rather than a stale number, because a
-published table would carry a non-zero `table:row_count` and both assets would
-carry a size and a checksum. Check those three fields before trusting any query
-in the next section.
+The PMTiles metadata reports 34,423 features in the `footprints` layer, with
+`subtile`, `mgrs_tile`, `quarters_present`, `first_quarter` and `last_quarter`
+properties. Join on the string `subtile` property. Quarter counts range from
+1 to 32. The collection records measured sizes and checksums for both files.
 
-Everything under "Available now" runs against the transfer manifests, which do
-exist.
+**One tile's published coverage history.** Run against the public file on
+2026-10-20; returns 32 rows for this tile, `2018.Q1` through `2025.Q4`.
 
-## Available now: the same questions, from the manifests
+```sql
+INSTALL httpfs; LOAD httpfs;
+SET http_timeout = 600000;
+SET http_retries = 5;
 
-**Which quarters cover this tile.** The answer the coverage table will make
-cheap. Today it costs a read of all 36 manifests, about 100 MB and roughly
-several minutes on a domestic connection. Run on 2026-09-28; returns 36 rows for
-this tile.
+SELECT quarter, bytes_total, valid_fraction
+FROM read_parquet('https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/coverage/tiles.parquet')
+WHERE subtile = '31UFU_0_0'
+ORDER BY quarter;
+```
+
+The 2017 imagery exists but is absent from these coverage derivatives. Use
+the manifests below when the question includes 2017.
+
+## Manifest recipes, including 2017
+
+**Which quarters cover this tile.** The coverage table answers this for
+2018–2025. Including 2017 costs a read of all 36 manifests, about 100 MB and
+roughly several minutes on a domestic connection. Run on 2026-09-28; returns
+36 rows for this tile.
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -45,8 +60,8 @@ GROUP BY 1, 2
 ORDER BY 1, 2;
 ```
 
-**How full a tile is, roughly, from its size.** Until `valid_fraction` exists,
-compressed size is the available proxy. Within one quarter, tiles that are
+**How full a tile is, roughly, from its size.** Where `valid_fraction` is NULL,
+compressed size is an available proxy. Within one quarter, tiles that are
 mostly nodata compress far smaller than full ones.
 
 ```sql
@@ -63,8 +78,8 @@ LIMIT 20;
 
 This ranks the emptiest tiles of the quarter. Treat it as a ranking, not a
 measurement: compression ratio depends on scene content as well as on nodata,
-so a uniform desert tile also compresses small. `valid_fraction` will be the
-measurement.
+so a uniform desert tile also compresses small. Use `valid_fraction` where
+it has been measured.
 
 **Tile counts per quarter.** Cross-check against
 `_status/{year}/{Qn}/complete.json`, which records the object count
@@ -81,17 +96,11 @@ GROUP BY 1, 2 ORDER BY 1, 2;
 
 Returns `2024 Q1 → 29528`, `2024 Q2 → 28272`.
 
-## Available after the first publish
-
-`tiles.parquet` sorted by `(subtile, quarter)`, so one tile's 36-quarter history
-is one range read, and `footprints.pmtiles` joined to it by `subtile`. Do not
-write against either yet.
-
 ## Join keys
 
 | From | Column | To | Column | Unique? |
 |---|---|---|---|---|
-| `coverage` | `subtile` | `footprints.pmtiles` | feature id | unique |
+| `coverage` | `subtile` | `footprints.pmtiles` | `subtile` property | many table rows per footprint |
 | `coverage` | `subtile` + `quarter` | itself | — | the table's unique key |
 | `coverage` | `subtile` | `mosaics` index | `_subtile` | not unique on either side |
 | `coverage` | `mgrs_tile` | MGRS grid | cell id | not unique |
@@ -113,16 +122,18 @@ computed over whichever tiles happened to be processed.
 driven by scene content as much as by how much of the tile is real. Use it to
 rank, not to quantify.
 
-**A missing row means a missing tile, not an empty one.** If a tile has no row
-for a quarter, the mosaic has no tile there for that quarter. That is different
+**Check the table's temporal extent before interpreting a missing row.** The
+published table covers 2018–2025; it cannot answer presence questions for 2017.
+Within its covered quarters, a missing row is different
 from a tile that exists and is mostly nodata, which does have a row, with a low
 `valid_fraction`. Both look like "no data" on a map and they mean different
 things.
 
-**Quarter counts stop at 36, but the bucket has 37.** The record this catalog
-describes is 2017 Q1 through 2025 Q4, so a tile present in every quarter has 36
-rows. `2026/Q2/` finished transferring on 2026-09-28 and has its own completion
-marker and manifest, but it is not in this catalog: its tiles use 256 × 256
+**Coverage counts stop at 32.** The imagery record this catalog describes is
+2017 Q1 through 2025 Q4, but the coverage table starts in 2018. A tile present
+in every covered quarter has 32 rows. `2026/Q2/` finished transferring on
+2026-09-28 and has its own completion marker and manifest, but it is not in
+this catalog: its tiles use 256 × 256
 internal blocks rather than 1024 × 1024, and that has to be described before the
 quarter is folded in. A glob over `manifest/manifest_*.parquet` therefore
 matches 37 files; filter on `year <= 2025` to match this catalog. A tile's
