@@ -6,6 +6,7 @@ place and adding one is a deliberate edit. Run from anywhere:
 
     python3 tests/run_all.py
 """
+
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 TESTS = [
+    "test_link_contract.py",
+    "test_overview_gdal.py",
     "test_links.py",
     "test_publish.py",
     "test_upload_data.py",

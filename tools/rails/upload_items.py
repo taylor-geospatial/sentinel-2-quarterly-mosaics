@@ -27,7 +27,6 @@ through, and not otherwise.
 opening a session, which is how to check the key layout before sending a
 million things.
 """
-from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
@@ -57,8 +56,9 @@ def say(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def collect(items_dir: Path, year: int, quarter: str, prefix: str,
-            key_prefix: str) -> list[tuple[Path, str]]:
+def collect(
+    items_dir: Path, year: int, quarter: str, prefix: str, key_prefix: str
+) -> list[tuple[Path, str]]:
     """(local path, object key) for every item JSON of one quarter."""
     root = items_dir.resolve() / str(year) / quarter
     if not root.is_dir():
@@ -93,6 +93,7 @@ def _client(session, endpoint: str | None, use_path_style: bool):
         return existing
     with _new_client:
         from botocore.config import Config
+
         # Adaptive retries with client-side rate limiting. Measured
         # against the proxy from a laptop: after a burst of about forty
         # requests, every call from this process was answered
@@ -104,7 +105,8 @@ def _client(session, endpoint: str | None, use_path_style: bool):
         if use_path_style:
             cfg["s3"] = {"addressing_style": "path"}
         _local.client = session.client(
-            "s3", endpoint_url=endpoint or None, config=Config(**cfg))
+            "s3", endpoint_url=endpoint or None, config=Config(**cfg)
+        )
     return _local.client
 
 
@@ -121,7 +123,7 @@ def put_one(job) -> tuple[str, str, str]:
     path, key, session, bucket, skip_existing, endpoint = job
     try:
         return _put_one(job)
-    except Exception as exc:                          # noqa: BLE001
+    except Exception as exc:
         return "failed", key, f"{type(exc).__name__}: {exc}"
 
 
@@ -130,37 +132,50 @@ def _put_one(job) -> tuple[str, str, str]:
     client = _client(session, endpoint, path_style(bucket))
     if skip_existing:
         try:
-            if int(client.head_object(Bucket=bucket, Key=key)["ContentLength"]
-                   ) == path.stat().st_size:
+            if (
+                int(client.head_object(Bucket=bucket, Key=key)["ContentLength"])
+                == path.stat().st_size
+            ):
                 return "skipped", key, ""
         except client.exceptions.ClientError as exc:
             if exc.response.get("Error", {}).get("Code", "") not in (
-                    "404", "NoSuchKey", "NotFound"):
+                "404",
+                "NoSuchKey",
+                "NotFound",
+            ):
                 raise
-    client.upload_file(str(path), bucket, key,
-                       ExtraArgs={"ContentType": CONTENT_TYPE})
+    client.upload_file(str(path), bucket, key, ExtraArgs={"ContentType": CONTENT_TYPE})
     return "uploaded", key, ""
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--items-dir", required=True,
-                    help="what make_items.py --items-dir wrote")
+    ap.add_argument(
+        "--items-dir", required=True, help="what make_items.py --items-dir wrote"
+    )
     ap.add_argument("--year", type=int, required=True)
     ap.add_argument("--quarter", required=True)
-    ap.add_argument("--profile",
-                    default=os.environ.get("AWS_PROFILE") or DEFAULT_PROFILE)
+    ap.add_argument(
+        "--profile", default=os.environ.get("AWS_PROFILE") or DEFAULT_PROFILE
+    )
     ap.add_argument("--key-prefix", default="")
-    ap.add_argument("--endpoint",
-                    help="S3 endpoint; defaults to endpoint_url in "
-                         "catalog.publish.yaml")
-    ap.add_argument("--via", choices=("direct", "proxy"), default="direct",
-                    help="direct (default): the direct S3 bucket; proxy: "
-                         "the data proxy, as the config writes it")
+    ap.add_argument(
+        "--endpoint",
+        help="S3 endpoint; defaults to endpoint_url in catalog.publish.yaml",
+    )
+    ap.add_argument(
+        "--via",
+        choices=("direct", "proxy"),
+        default="direct",
+        help="direct (default): the direct S3 bucket; proxy: "
+        "the data proxy, as the config writes it",
+    )
     ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
-    ap.add_argument("--skip-existing", action="store_true",
-                    help="HEAD before each put; for resuming, not for a "
-                         "first run")
+    ap.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="HEAD before each put; for resuming, not for a first run",
+    )
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
 
@@ -170,9 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     bucket, prefix = split_s3_uri(config["write_prefix"])
     jobs = collect(Path(a.items_dir), a.year, a.quarter, prefix, a.key_prefix)
     total_bytes = sum(p.stat().st_size for p, _ in jobs)
-    say(f"{a.year} {a.quarter}: {len(jobs):,} item(s), "
+    say(
+        f"{a.year} {a.quarter}: {len(jobs):,} item(s), "
         f"{total_bytes / 1e6:,.1f} MB -> s3://{bucket}/{prefix} "
-        f"via {config.get('endpoint_url') or '(aws default)'}")
+        f"via {config.get('endpoint_url') or '(aws default)'}"
+    )
     if not jobs:
         return 0
     if a.dry_run:
@@ -182,8 +199,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import boto3
-    session = boto3.Session(profile_name=a.profile,
-                            region_name=config.get("region") or None)
+
+    session = boto3.Session(
+        profile_name=a.profile, region_name=config.get("region") or None
+    )
     # Resolve the credentials once, on this thread, so the workers do not
     # race a `credential_process` profile's binary at the same moment.
     session.get_credentials().get_frozen_credentials()
@@ -191,30 +210,33 @@ def main(argv: list[str] | None = None) -> int:
     done = {"uploaded": 0, "skipped": 0, "failed": 0}
     failures: list[tuple[str, str]] = []
     endpoint = a.endpoint or config.get("endpoint_url")
-    work = [(p, k, session, bucket, a.skip_existing, endpoint)
-            for p, k in jobs]
+    work = [(p, k, session, bucket, a.skip_existing, endpoint) for p, k in jobs]
     with cf.ThreadPoolExecutor(a.workers) as pool:
-        for n, (outcome, key, detail) in enumerate(pool.map(put_one, work),
-                                                   start=1):
+        for n, (outcome, key, detail) in enumerate(pool.map(put_one, work), start=1):
             done[outcome] += 1
             if outcome == "failed":
                 failures.append((key, detail))
             if n % PROGRESS_EVERY == 0:
                 rate = n / (time.monotonic() - t0)
-                say(f"  {n:,}/{len(jobs):,} ({rate:,.0f}/s, "
-                    f"{(len(jobs) - n) / rate / 60:,.1f} min left)")
+                say(
+                    f"  {n:,}/{len(jobs):,} ({rate:,.0f}/s, "
+                    f"{(len(jobs) - n) / rate / 60:,.1f} min left)"
+                )
     secs = time.monotonic() - t0
-    say(f"{a.year} {a.quarter}: {done['uploaded']:,} uploaded, "
+    say(
+        f"{a.year} {a.quarter}: {done['uploaded']:,} uploaded, "
         f"{done['skipped']:,} skipped, {done['failed']:,} failed, "
-        f"{secs / 60:,.1f} min ({len(jobs) / secs:,.0f} objects/s)")
+        f"{secs / 60:,.1f} min ({len(jobs) / secs:,.0f} objects/s)"
+    )
     if failures:
         print(f"\n{len(failures)} object(s) failed:", file=sys.stderr)
         for key, detail in failures[:20]:
             print(f"  {key}: {detail}", file=sys.stderr)
         if len(failures) > 20:
             print(f"  ... and {len(failures) - 20} more", file=sys.stderr)
-        print("Rerun with --skip-existing to retry only what is missing.",
-              file=sys.stderr)
+        print(
+            "Rerun with --skip-existing to retry only what is missing.", file=sys.stderr
+        )
         return 1
     return 0
 

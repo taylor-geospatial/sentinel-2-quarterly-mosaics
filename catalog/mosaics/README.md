@@ -1,17 +1,13 @@
 # Quarterly cloudless mosaic tiles
 
-The imagery. Every tile of the Copernicus Sentinel-2 Global Mosaics for 36
-quarters, 2017 Q1 through 2025 Q4: 1,017,575 mosaic tiles, 4,070,300
-Cloud-Optimized GeoTIFFs, 607.5 TB.
+This collection describes the four mirrored bands of the Copernicus Sentinel-2 Global Mosaics for 36 quarters, from 2017 Q1 through 2025 Q4.
+It contains 1,017,575 mosaic tiles, 4,070,300 Cloud-Optimized GeoTIFFs, and 607.5 TB.
+See the [catalog README](../README.md) for provenance, access, licensing, and coverage limits.
 
-Start at the [catalog README](../README.md) for the mirror story, the licence and
-the bucket-level warnings. This page is about the rasters.
+## Tile layout
 
-## One tile
-
-A mosaic tile is 10008 × 10008 pixels at 10 m: about 100 km square, one
-MGRS grid cell, projected in that cell's UTM zone. Four single-band COGs sit in
-one directory:
+A mosaic tile is 10008 × 10008 pixels at 10 m, about 100 km square, projected in its MGRS cell's UTM zone.
+Each tile directory contains a single-band COG for B02, B03, B04, and B08:
 
 ```
 2024/Q2/31UFU_0_0/B02.tif
@@ -20,7 +16,7 @@ one directory:
 2024/Q2/31UFU_0_0/B08.tif
 ```
 
-Measured with `gdalinfo` against the published file on 2026-09-28:
+The following properties were measured with `gdalinfo` against the published file on 2026-09-28:
 
 | Property | Value |
 |---|---|
@@ -34,40 +30,34 @@ Measured with `gdalinfo` against the published file on 2026-09-28:
 | Overviews | 5004, 2502, 1251, 626, 313 |
 | CRS | the tile's own UTM zone, e.g. `EPSG:32631` |
 
-Five overview levels mean a whole-tile preview costs a 313 × 313 read. That is
-what makes a browse layer over a million tiles affordable.
+The smallest of the five overview levels provides a 313 × 313 whole-tile preview.
 
-## Reading a value
+## Reflectance values
 
-Pixels are `int16`, scaled by 10000. **Multiply by 0.0001 for surface
-reflectance.** The scale is not written into the GeoTIFF, so nothing applies it
-for you and nothing warns you. A reader that skips it gets values around 1000
-where reflectance should be 0.1.
+Pixels are `int16` values scaled by 10000.
+Multiply by 0.0001 to obtain surface reflectance.
+The GeoTIFF does not record the scale, so a stored value of 1000 corresponds to reflectance of 0.1.
 
-NoData is `-32768`. Zero is a real reflectance value, so a `> 0` mask silently
-discards dark water, shadow and burn scars.
+Nodata is `-32768`, and zero is a valid reflectance value.
+A `> 0` mask discards valid dark pixels, including water, shadows, and burn scars.
 
-## The bands
+## Bands
 
-| Asset | Band | Common name | Centre | Bandwidth |
+| Asset | Band | Common name | Center | Bandwidth |
 |---|---|---|---|---|
 | `B02` | Band 2 | blue | 0.493 µm | 0.065 µm |
 | `B03` | Band 3 | green | 0.560 µm | 0.035 µm |
 | `B04` | Band 4 | red | 0.665 µm | 0.031 µm |
 | `B08` | Band 8 | NIR | 0.833 µm | 0.115 µm |
 
-Red, green and blue give a natural-colour composite. `B08` with `B04` gives
-NDVI, which is the usual reason this band set exists:
-`(B08 - B04) / (B08 + B04)`, computed after applying the scale, or on the raw
-integers since the scale cancels in the ratio.
+Red, green, and blue form a natural-color composite.
+Compute NDVI from `B08` and `B04` as `(B08 - B04) / (B08 + B04)`.
+The common scale factor cancels in the ratio, so the expression can use either scaled values or raw integers.
 
-### A note on the bandwidths
+### Spectral bandwidths
 
-The centre wavelengths above match the upstream CDSE collection. The bandwidths
-do not.
-
-The `eo:full_width_half_max` values CDSE publishes for this product are wrong.
-Read from item `Sentinel-2_mosaic_2026_Q2_60XWF_1_0` on 2026-09-28:
+The center wavelengths follow the upstream CDSE collection, while the bandwidths use ESA mission values.
+The following CDSE values were read from `Sentinel-2_mosaic_2026_Q2_60XWF_1_0` on 2026-09-28:
 
 | Band | CDSE publishes | ESA mission value | This catalog |
 |---|---|---|---|
@@ -76,77 +66,53 @@ Read from item `Sentinel-2_mosaic_2026_Q2_60XWF_1_0` on 2026-09-28:
 | B04 | 0.342 µm | 0.031 µm | 0.031 µm |
 | B08 | 0.454 µm | 0.115 µm | 0.115 µm |
 
-Every upstream value is close to 0.54 times its own centre wavelength, which is
-the signature of a generation bug rather than a measurement. Taken literally
-they are absurd: a red band 0.342 µm wide would span from green through the near
-infrared, overlapping every other band in the set.
+Each upstream value is close to 0.54 times its center wavelength, suggesting a generation error.
+A red band 0.342 µm wide would span green through near infrared and overlap the other bands in this set.
+The catalog uses the ESA mission bandwidths to correct that metadata.
+For exact instrument response, use the ESA Sentinel-2 spectral response function tables.
 
-This catalog publishes the ESA mission bandwidths instead. It is the one field
-where this mirror deliberately disagrees with its source, recorded here so that
-nobody "corrects" it back.
+## Omitted assets
 
-If you need the instrument response exactly, take it from the ESA Sentinel-2
-spectral response function tables rather than from any STAC collection,
-including this one.
+The upstream product has seven assets per tile, and this mirror contains four.
+It omits the following assets:
 
-## What this mirror does not carry
+- `observations.tif` records the number of valid observations contributing to each composite pixel.
+- `userdata.json` contains upstream per-tile metadata.
+- `Product` contains the zipped whole-product archive.
 
-The upstream product has seven assets per tile. This mirror copied four. It does
-**not** carry:
+The collection's `item_assets` describes only the four mirrored bands.
+Observation counts require the original product from CDSE.
 
-- `observations.tif` — the per-pixel count of valid observations that went into
-  the composite. If you need to know how well-supported a pixel is, this is the
-  band that tells you, and it is not here.
-- `userdata.json` — upstream per-tile metadata.
-- `Product` — the zipped whole-product archive.
+## Item index
 
-The `item_assets` in `collection.json` therefore lists four assets, not seven. Do
-not copy the upstream `item_assets` in: it describes files this mirror does not
-have, and a client that trusts it will request 404s.
+The public collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
+Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
+Use the transfer manifests for quarters outside that registered coverage.
 
-## The item index
+Each quarter's GeoParquet is stored at `quarter=YYYY.Qn/items.parquet` and sorted by `_tile`, `datetime`, then `_subtile`.
+The `_subtile` field orders mosaic tiles sharing an MGRS cell, since `datetime` is constant within a quarter.
+The column definitions appear under `table:columns` in [collection.json](collection.json) and are generated from `tools/schema.py` in the source repository.
+The writer uses the same definitions when casting columns.
 
-One GeoParquet per quarter, at `quarter=YYYY.Qn/items.parquet`, sorted by
-`_tile`, then `datetime`, then `_subtile`, so one tile's 36-quarter history is a
-contiguous run. The `_subtile` tiebreak matters because `datetime` is constant
-within a quarter file and some MGRS cells hold more than one mosaic tile;
-without it those rows would have no defined order.
-
-The columns and their types are in [`collection.json`](collection.json) under
-`table:columns`. That array is generated from `tools/schema.py`, the same list
-the writer casts to, so the documentation and the file cannot disagree.
-
-**It is not published yet.** `table:row_count` is 0 and `partition:file_count`
-is 0 until the first backfill lands. Each quarter gains an `item` link as its
-partition is written, so the collection states what it actually holds at any
-point in the backfill rather than promising the whole set up front.
-
-Until then, use the per-quarter transfer manifests at
-`manifest/manifest_{year}_{Qn}.parquet`. [`AGENTS.md`](AGENTS.md) has worked
-queries against them, every one of which was run before it was written down.
+The per-quarter transfer manifests use `manifest/manifest_{year}_{Qn}.parquet`.
+The [agent guide](AGENTS.md) provides queries tested against those files.
 
 ## Coverage by quarter
 
-All 36 quarters are complete, per their `_status/{year}/{Qn}/complete.json`
-markers read on 2026-09-28. Tile counts run from 25,172 (2017 Q3) to 30,668
-(2019 Q1); the growth over the record is the mosaic footprint expanding, not
-gaps in the early years.
+All 36 quarters are complete according to `_status/{year}/{Qn}/complete.json` markers read on 2026-09-28.
+Counts range from 25,172 tiles (2017 Q3) to 30,668 (2019 Q1), reflecting expansion of the mosaic footprint.
 
-2026 is **not** in this collection, and the two prefixes differ:
+The collection excludes 2026.
+`2026/Q2/` completed on 2026-09-28 at 14:44 UTC, after the collection was written.
+Its completion marker and manifest record 115,572 objects across 28,893 tiles, totaling 17.25 TB.
+The files are readable, but the catalog still needs metadata describing their different block size.
 
-`2026/Q2/` completed on 2026-09-28 at 14:44 UTC, after this collection was
-written: 115,572 objects, 28,893 tiles, 17.25 TB, with a completion marker and
-a manifest. Its bytes are readable. It is held out because its tiles use
-**256 × 256 internal blocks** where 2017 through 2025 use 1024 × 1024, measured
-with `gdalinfo` on `2026/Q2/31UFU_0_0/B04.tif`. Nothing else differs: same COG
-layout, same DEFLATE and predictor, same size, type, nodata and overview levels.
-Folding the quarter in means describing that difference, not just extending the
-extent, because a reader tuned to 1024 × 1024 blocks will issue many more, much
-smaller range requests against it.
+The 2026 Q2 file `2026/Q2/31UFU_0_0/B04.tif` uses 256 × 256 internal blocks, compared with 1024 × 1024 for 2017–2025.
+Its COG layout, DEFLATE compression and predictor, dimensions, type, nodata value, and overview levels are unchanged.
+Windowed reads request more, smaller byte ranges for the same pixels.
 
-`2026/Q1/` is an unfinished transfer: 799 objects, no completion marker, no
-manifest.
+`2026/Q1/` held 799 objects without a completion marker or manifest when inspected.
+Do not use that unfinished transfer as data.
 
-Because `manifest_2026_Q2.parquet` now exists, a glob over
-`manifest/manifest_*.parquet` matches 37 files. Filter on `year <= 2025` to get
-the 36 quarters this collection describes.
+The additional `manifest_2026_Q2.parquet` brings the documented manifest glob count to 37 files.
+Filter on `year <= 2025` to select the 36 quarters described by this collection.

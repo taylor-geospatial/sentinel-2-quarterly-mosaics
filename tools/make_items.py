@@ -35,7 +35,6 @@ Only the header is read (about 16 KB with `GDAL_DISABLE_READDIR_ON_OPEN`),
 so verifying a hundred tiles costs a couple of megabytes. It needs
 rasterio; without it the flag fails loudly rather than passing quietly.
 """
-from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
@@ -51,22 +50,30 @@ import mgrs_grid  # noqa: E402
 import schema  # noqa: E402
 from publish import load_config  # noqa: E402
 
-MANIFEST_URL = ("https://data.source.coop/tge-labs/"
-                "sentinel-2-quarterly-cloudless-mosaics/manifest/"
-                "manifest_{year}_{quarter}.parquet")
-CDSE_ITEM = ("https://stac.dataspace.copernicus.eu/v1/collections/"
-             "sentinel-2-global-mosaics/items/{id}")
-BAND_TITLES = {"B02": "Blue (band 2), 10 m", "B03": "Green (band 3), 10 m",
-               "B04": "Red (band 4), 10 m",
-               "B08": "Near-infrared (band 8), 10 m"}
+MANIFEST_URL = (
+    "https://data.source.coop/tge-labs/"
+    "sentinel-2-quarterly-cloudless-mosaics/manifest/"
+    "manifest_{year}_{quarter}.parquet"
+)
+CDSE_ITEM = (
+    "https://stac.dataspace.copernicus.eu/v1/collections/"
+    "sentinel-2-global-mosaics/items/{id}"
+)
+BAND_TITLES = {
+    "B02": "Blue (band 2), 10 m",
+    "B03": "Green (band 3), 10 m",
+    "B04": "Red (band 4), 10 m",
+    "B08": "Near-infrared (band 8), 10 m",
+}
 
 
 def say(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def read_manifest(source: str, limit: int | None,
-                  tiles: list[str] | None) -> list[tuple[str, dict[str, int]]]:
+def read_manifest(
+    source: str, limit: int | None, tiles: list[str] | None
+) -> list[tuple[str, dict[str, int]]]:
     """(item_id, {band: size_bytes}) for each item, ordered by id.
 
     One DuckDB query does the grouping. An item that does not carry all
@@ -75,13 +82,16 @@ def read_manifest(source: str, limit: int | None,
     missing object is a transfer to repair, not a row to write.
     """
     import duckdb
+
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
     where = ""
     if tiles:
         wanted = ", ".join(f"'{t}'" for t in tiles)
-        where = (f"WHERE regexp_extract(item_id, "
-                 f"'_(\\d+[A-Z]{{3}}_\\d+_\\d+)$', 1) IN ({wanted})")
+        where = (
+            f"WHERE regexp_extract(item_id, "
+            f"'_(\\d+[A-Z]{{3}}_\\d+_\\d+)$', 1) IN ({wanted})"
+        )
     rows = con.execute(f"""
         SELECT item_id, band, size_bytes
         FROM read_parquet('{source}') {where}
@@ -94,15 +104,18 @@ def read_manifest(source: str, limit: int | None,
     for item_id, bands in items.items():
         missing = set(schema.BANDS) - set(bands)
         if missing:
-            sys.exit(f"{item_id}: manifest has no {', '.join(sorted(missing))} "
-                     "row; the transfer is incomplete, so no item is written")
+            sys.exit(
+                f"{item_id}: manifest has no {', '.join(sorted(missing))} "
+                "row; the transfer is incomplete, so no item is written"
+            )
         out.append((item_id, bands))
     out.sort()
     return out[:limit] if limit else out
 
 
-def build_item(item_id: str, sizes: dict[str, int], public_base: str,
-               root_href: str) -> dict:
+def build_item(
+    item_id: str, sizes: dict[str, int], public_base: str, root_href: str
+) -> dict:
     """One STAC 1.1.0 item. Every field is derived; nothing is fetched."""
     year, quarter, tile = schema.split_id(item_id)
     epsg, _, _ = mgrs_grid.origin(tile)
@@ -147,19 +160,36 @@ def build_item(item_id: str, sizes: dict[str, int], public_base: str,
         },
         "assets": assets,
         "links": [
-            {"rel": "root", "href": root_href, "type": "application/json",
-             "title": "Sentinel-2 Quarterly Cloudless Mosaics"},
-            {"rel": "collection", "href": f"{public_base}/mosaics/collection.json",
-             "type": "application/json",
-             "title": "Quarterly cloudless mosaic tiles"},
-            {"rel": "parent", "href": f"{public_base}/mosaics/collection.json",
-             "type": "application/json",
-             "title": "Quarterly cloudless mosaic tiles"},
-            {"rel": "self", "href": f"{base}/{item_id}.json",
-             "type": "application/geo+json", "title": item_id},
-            {"rel": "derived_from", "href": CDSE_ITEM.format(id=item_id),
-             "type": "application/geo+json",
-             "title": "The CDSE item this tile mirrors"},
+            {
+                "rel": "root",
+                "href": root_href,
+                "type": "application/json",
+                "title": "Sentinel-2 Quarterly Cloudless Mosaics",
+            },
+            {
+                "rel": "collection",
+                "href": f"{public_base}/mosaics/collection.json",
+                "type": "application/json",
+                "title": "Quarterly cloudless mosaic tiles",
+            },
+            {
+                "rel": "parent",
+                "href": f"{public_base}/mosaics/collection.json",
+                "type": "application/json",
+                "title": "Quarterly cloudless mosaic tiles",
+            },
+            {
+                "rel": "self",
+                "href": f"{base}/{item_id}.json",
+                "type": "application/geo+json",
+                "title": item_id,
+            },
+            {
+                "rel": "derived_from",
+                "href": CDSE_ITEM.format(id=item_id),
+                "type": "application/geo+json",
+                "title": "The CDSE item this tile mirrors",
+            },
         ],
     }
 
@@ -175,8 +205,14 @@ def write_json(path: Path, payload: dict) -> None:
 VERIFY_ATTEMPTS = 3
 
 
-def verify(tiles: list[str], public_base: str, year: int, quarter: str,
-           workers: int = 12, tolerate_unreadable: int = 0) -> int:
+def verify(
+    tiles: list[str],
+    public_base: str,
+    year: int,
+    quarter: str,
+    workers: int = 12,
+    tolerate_unreadable: int = 0,
+) -> int:
     """Open sampled COGs and check the computed georeferencing.
 
     Two failures live here and they are not the same thing, which is
@@ -205,9 +241,16 @@ def verify(tiles: list[str], public_base: str, year: int, quarter: str,
         for attempt in range(1, VERIFY_ATTEMPTS + 1):
             try:
                 with rasterio.open(url) as ds:
-                    return tile, None, (ds.crs.to_epsg(), list(ds.transform)[:6],
-                                        [ds.height, ds.width])
-            except Exception as exc:                  # noqa: BLE001
+                    return (
+                        tile,
+                        None,
+                        (
+                            ds.crs.to_epsg(),
+                            list(ds.transform)[:6],
+                            [ds.height, ds.width],
+                        ),
+                    )
+            except Exception as exc:
                 last = str(exc)
                 if attempt < VERIFY_ATTEMPTS:
                     time.sleep(2 * attempt)
@@ -219,23 +262,34 @@ def verify(tiles: list[str], public_base: str, year: int, quarter: str,
         for tile, err, got in pool.map(one, tiles):
             if err:
                 unreadable.append(tile)
-                print(f"  {tile}: unreadable after {VERIFY_ATTEMPTS} "
-                      f"attempts: {err}", file=sys.stderr)
+                print(
+                    f"  {tile}: unreadable after {VERIFY_ATTEMPTS} attempts: {err}",
+                    file=sys.stderr,
+                )
                 continue
             epsg, _, _ = mgrs_grid.origin(tile)
-            want = (epsg, mgrs_grid.transform_of(tile)[:6],
-                    [mgrs_grid.TILE_PX, mgrs_grid.TILE_PX])
+            want = (
+                epsg,
+                mgrs_grid.transform_of(tile)[:6],
+                [mgrs_grid.TILE_PX, mgrs_grid.TILE_PX],
+            )
             if got != want:
                 mismatched.append(tile)
-                print(f"  {tile}: MISMATCH -- file says {got}, we computed "
-                      f"{want}", file=sys.stderr)
-    say(f"verify: {len(tiles)} tile(s), {len(mismatched)} geometry "
+                print(
+                    f"  {tile}: MISMATCH -- file says {got}, we computed {want}",
+                    file=sys.stderr,
+                )
+    say(
+        f"verify: {len(tiles)} tile(s), {len(mismatched)} geometry "
         f"mismatch(es), {len(unreadable)} unreadable, "
-        f"{time.monotonic() - t0:,.1f}s")
+        f"{time.monotonic() - t0:,.1f}s"
+    )
     over = max(0, len(unreadable) - tolerate_unreadable)
     if unreadable and not over:
-        say(f"verify: tolerating {len(unreadable)} unreadable tile(s); "
-            "they read as a network problem, not a geometry one")
+        say(
+            f"verify: tolerating {len(unreadable)} unreadable tile(s); "
+            "they read as a network problem, not a geometry one"
+        )
     return len(mismatched) + over
 
 
@@ -243,28 +297,44 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--year", type=int, required=True)
     ap.add_argument("--quarter", required=True, choices=sorted(schema.QUARTER_MONTHS))
-    ap.add_argument("--out",
-                    help="work directory; the staging file lands under "
-                         "quarter=YYYY.Qn/ inside it. Not needed with "
-                         "--verify-only.")
-    ap.add_argument("--items-dir",
-                    help="also write item JSON at {year}/{Qn}/{tile}/{id}.json")
-    ap.add_argument("--manifest",
-                    help="manifest path or URL (default: the published one)")
+    ap.add_argument(
+        "--out",
+        help="work directory; the staging file lands under "
+        "quarter=YYYY.Qn/ inside it. Not needed with "
+        "--verify-only.",
+    )
+    ap.add_argument(
+        "--items-dir", help="also write item JSON at {year}/{Qn}/{tile}/{id}.json"
+    )
+    ap.add_argument(
+        "--manifest", help="manifest path or URL (default: the published one)"
+    )
     ap.add_argument("--limit", type=int, help="stop after N items (smoke test)")
     ap.add_argument("--tiles", help="comma-separated tile ids to keep")
-    ap.add_argument("--verify", type=int, default=0, metavar="N",
-                    help="check N sampled tiles against their COG headers")
-    ap.add_argument("--tolerate-unreadable", type=int, default=2,
-                    metavar="N",
-                    help="how many sampled tiles may fail to open before "
-                         "the gate fails. A geometry mismatch always fails, "
-                         "however few (default 2)")
-    ap.add_argument("--verify-only", action="store_true",
-                    help="run the --verify gate and write nothing. The gate "
-                         "runs after the items are already staged, and "
-                         "rewriting a 130 MB staging file to re-read a "
-                         "manifest is pure waste.")
+    ap.add_argument(
+        "--verify",
+        type=int,
+        default=0,
+        metavar="N",
+        help="check N sampled tiles against their COG headers",
+    )
+    ap.add_argument(
+        "--tolerate-unreadable",
+        type=int,
+        default=2,
+        metavar="N",
+        help="how many sampled tiles may fail to open before "
+        "the gate fails. A geometry mismatch always fails, "
+        "however few (default 2)",
+    )
+    ap.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="run the --verify gate and write nothing. The gate "
+        "runs after the items are already staged, and "
+        "rewriting a 130 MB staging file to re-read a "
+        "manifest is pure waste.",
+    )
     a = ap.parse_args(argv)
 
     if not a.out and not a.verify_only:
@@ -278,8 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     t0 = time.monotonic()
     say(f"{a.year} {a.quarter}: reading {source}")
     manifest = read_manifest(source, a.limit, tiles)
-    say(f"{a.year} {a.quarter}: {len(manifest):,} item(s), "
-        f"{time.monotonic() - t0:,.1f}s")
+    say(
+        f"{a.year} {a.quarter}: {len(manifest):,} item(s), "
+        f"{time.monotonic() - t0:,.1f}s"
+    )
     if not manifest:
         sys.exit(f"{a.year} {a.quarter}: the manifest matched no items")
 
@@ -288,10 +360,16 @@ def main(argv: list[str] | None = None) -> int:
             sys.exit("--verify-only needs --verify N")
         sample = [schema.split_id(i)[2] for i, _ in manifest]
         import random
+
         random.seed(0)
         sample = random.sample(sample, min(a.verify, len(sample)))
-        if verify(sample, public_base, a.year, a.quarter,
-                  tolerate_unreadable=a.tolerate_unreadable):
+        if verify(
+            sample,
+            public_base,
+            a.year,
+            a.quarter,
+            tolerate_unreadable=a.tolerate_unreadable,
+        ):
             sys.exit("verification failed; not publishing this quarter")
         return 0
 
@@ -310,24 +388,33 @@ def main(argv: list[str] | None = None) -> int:
             size_total += sum(sizes.values())
             if items_dir:
                 tile = schema.split_id(item_id)[2]
-                write_json(items_dir / str(a.year) / a.quarter / tile /
-                           f"{item_id}.json", item)
+                write_json(
+                    items_dir / str(a.year) / a.quarter / tile / f"{item_id}.json", item
+                )
             written += 1
     os.replace(tmp, staging)
-    say(f"{a.year} {a.quarter}: wrote {written:,} row(s) to {staging} "
+    say(
+        f"{a.year} {a.quarter}: wrote {written:,} row(s) to {staging} "
         f"({staging.stat().st_size / 1e6:,.1f} MB), "
-        f"{time.monotonic() - t0:,.1f}s")
+        f"{time.monotonic() - t0:,.1f}s"
+    )
     if items_dir:
         say(f"{a.year} {a.quarter}: item JSON under {items_dir}")
     say(f"{a.year} {a.quarter}: {size_total / 1e12:,.3f} TB of COGs described")
 
     if a.verify:
         import random
+
         sample = [schema.split_id(i)[2] for i, _ in manifest]
         random.seed(0)
         sample = random.sample(sample, min(a.verify, len(sample)))
-        if verify(sample, public_base, a.year, a.quarter,
-                  tolerate_unreadable=a.tolerate_unreadable):
+        if verify(
+            sample,
+            public_base,
+            a.year,
+            a.quarter,
+            tolerate_unreadable=a.tolerate_unreadable,
+        ):
             sys.exit("verification failed; not publishing this quarter")
     return 0
 

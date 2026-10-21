@@ -23,7 +23,6 @@ tippecanoe has to be on PATH. Without it this writes
 silently: the parquet is the input the tileset is made from, and a
 machine that cannot make tiles can still hand that file to one that can.
 """
-from __future__ import annotations
 
 import argparse
 import os
@@ -61,8 +60,7 @@ def roll_up(con, tiles: Path, staged: Path) -> int:
           ORDER BY subtile
         ) TO '{staged}' (FORMAT PARQUET, COMPRESSION zstd, COMPRESSION_LEVEL 1)
     """)
-    return con.execute(
-        f"SELECT count(*) FROM read_parquet('{staged}')").fetchone()[0]
+    return con.execute(f"SELECT count(*) FROM read_parquet('{staged}')").fetchone()[0]
 
 
 def write_parquet(staged: Path, final: Path) -> None:
@@ -72,16 +70,31 @@ def write_parquet(staged: Path, final: Path) -> None:
     tmp.unlink(missing_ok=True)
     try:
         r = subprocess.run(
-            ["gpio", "sort", "column", str(staged), str(tmp), SORT_KEY,
-             "--geoparquet-version", "2.0", "--compression", "zstd",
-             "--compression-level", str(schema.ZSTD_LEVEL),
-             "--row-group-size", str(ROW_GROUP_SIZE)],
-            capture_output=True, text=True)
+            [
+                "gpio",
+                "sort",
+                "column",
+                str(staged),
+                str(tmp),
+                SORT_KEY,
+                "--geoparquet-version",
+                "2.0",
+                "--compression",
+                "zstd",
+                "--compression-level",
+                str(schema.ZSTD_LEVEL),
+                "--row-group-size",
+                str(ROW_GROUP_SIZE),
+            ],
+            capture_output=True,
+            text=True,
+        )
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
             sys.exit("gpio sort failed for the footprints")
-        chk = subprocess.run(["gpio", "check", "all", str(tmp)],
-                             capture_output=True, text=True)
+        chk = subprocess.run(
+            ["gpio", "check", "all", str(tmp)], capture_output=True, text=True
+        )
         if chk.returncode != 0:
             print(chk.stdout[-2000:], chk.stderr[-2000:], file=sys.stderr)
             sys.exit("gpio check failed for the footprints")
@@ -92,9 +105,11 @@ def write_parquet(staged: Path, final: Path) -> None:
 
 def make_pmtiles(source: Path, dest: Path, max_zoom: int) -> bool:
     if shutil.which("tippecanoe") is None:
-        say("tippecanoe is not on PATH, so no tileset was built. "
+        say(
+            "tippecanoe is not on PATH, so no tileset was built. "
             f"{source} is the input; build the tileset where tippecanoe "
-            "is available (tools/rails/environment.yml pins it).")
+            "is available (tools/rails/environment.yml pins it)."
+        )
         return False
     dest.parent.mkdir(parents=True, exist_ok=True)
     # The temporary name keeps the .pmtiles extension. tippecanoe picks
@@ -106,24 +121,40 @@ def make_pmtiles(source: Path, dest: Path, max_zoom: int) -> bool:
     tmp.unlink(missing_ok=True)
     t0 = time.monotonic()
     r = subprocess.run(
-        ["gpio", "pmtiles", "create", str(source), str(tmp),
-         "-l", LAYER, "--min-zoom", "0", "--max-zoom", str(max_zoom),
-         # A mosaic cell is 100 km across, so four decimals (about 11 m)
-         # is already far finer than the geometry. Six would spend a
-         # third of the tileset on digits no client can use.
-         "--precision", "4", "--force"],
-        capture_output=True, text=True)
+        [
+            "gpio",
+            "pmtiles",
+            "create",
+            str(source),
+            str(tmp),
+            "-l",
+            LAYER,
+            "--min-zoom",
+            "0",
+            "--max-zoom",
+            str(max_zoom),
+            # A mosaic cell is 100 km across, so four decimals (about 11 m)
+            # is already far finer than the geometry. Six would spend a
+            # third of the tileset on digits no client can use.
+            "--precision",
+            "4",
+            "--force",
+        ],
+        capture_output=True,
+        text=True,
+    )
     if r.returncode != 0:
         print(r.stdout[-3000:], r.stderr[-3000:], file=sys.stderr)
         sys.exit("gpio pmtiles create failed")
     with tmp.open("rb") as fh:
         magic = fh.read(7)
     if magic != b"PMTiles":
-        sys.exit(f"{tmp}: tippecanoe did not write PMTiles (check the "
-                 "output extension); refusing to publish it")
+        sys.exit(
+            f"{tmp}: tippecanoe did not write PMTiles (check the "
+            "output extension); refusing to publish it"
+        )
     os.replace(tmp, dest)
-    say(f"{dest}: {dest.stat().st_size / 1e6:,.1f} MB, "
-        f"{time.monotonic() - t0:,.1f}s")
+    say(f"{dest}: {dest.stat().st_size / 1e6:,.1f} MB, {time.monotonic() - t0:,.1f}s")
     return True
 
 
@@ -131,14 +162,19 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--work", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--max-zoom", type=int, default=7,
-                    help="tippecanoe simplifies below the max zoom and not "
-                         "at it, so the cells keep full detail here and "
-                         "clients overzoom past it. 7 is 10 MB against 19 "
-                         "at 8, for the same geometry (default 7)")
+    ap.add_argument(
+        "--max-zoom",
+        type=int,
+        default=7,
+        help="tippecanoe simplifies below the max zoom and not "
+        "at it, so the cells keep full detail here and "
+        "clients overzoom past it. 7 is 10 MB against 19 "
+        "at 8, for the same geometry (default 7)",
+    )
     a = ap.parse_args(argv)
 
     import duckdb
+
     tiles = Path(a.out) / "coverage" / "tiles.parquet"
     if not tiles.is_file():
         sys.exit(f"{tiles}: not there; run make_coverage.py first")
@@ -154,10 +190,11 @@ def main(argv: list[str] | None = None) -> int:
     say(f"footprints: {rows:,} mosaic tile(s), {time.monotonic() - t0:,.1f}s")
     write_parquet(staged, final)
     staged.unlink(missing_ok=True)
-    say(f"footprints: {final}, {final.stat().st_size / 1e6:,.1f} MB, "
-        "gpio check all passed")
-    make_pmtiles(final, Path(a.out) / "coverage" / "footprints.pmtiles",
-                 a.max_zoom)
+    say(
+        f"footprints: {final}, {final.stat().st_size / 1e6:,.1f} MB, "
+        "gpio check all passed"
+    )
+    make_pmtiles(final, Path(a.out) / "coverage" / "footprints.pmtiles", a.max_zoom)
     return 0
 
 

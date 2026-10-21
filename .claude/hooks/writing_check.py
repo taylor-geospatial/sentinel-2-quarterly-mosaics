@@ -29,8 +29,6 @@ person from filing an issue.
 Standard library only: it runs in every repo with no install step.
 """
 
-from __future__ import annotations
-
 import argparse
 import bisect
 import json
@@ -926,5 +924,5 @@ if __name__ == "__main__":
         sys.exit(main())
     except SystemExit:
         raise
-    except Exception:  # noqa: BLE001 - fail open, never block the author.
+    except Exception:  # Fail open, never block the author.
         sys.exit(0)

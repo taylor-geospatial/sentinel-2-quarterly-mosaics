@@ -21,12 +21,14 @@ message gives the one command that installs a usable rashid.
 
 Run: python3 tests/test_conformance.py
 """
+
 import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -51,7 +53,7 @@ SPEC = "rashid>=0.1.8,<0.2.0"
 INSTALL = f"python -m pip install '{SPEC}'"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     """Report the problem, name the fix, and exit non-zero."""
     print(f"error  {message}")
     print(f"       install a usable rashid with: {INSTALL}")
@@ -61,9 +63,7 @@ def fail(message: str) -> None:
 def rashid_version() -> tuple[int, ...]:
     """The version that rashid reports, as a tuple of integers."""
     try:
-        proc = subprocess.run(
-            ["rashid", "--version"], capture_output=True, text=True
-        )
+        proc = subprocess.run(["rashid", "--version"], capture_output=True, text=True)
     except OSError as exc:
         fail(f"rashid --version did not run ({exc})")
     if proc.returncode != 0:
@@ -97,11 +97,12 @@ try:
 except json.JSONDecodeError:
     print(result.stdout)
     print(result.stderr, file=sys.stderr)
-    raise SystemExit("rashid produced no JSON report")
+    raise SystemExit("rashid produced no JSON report") from None
 
 findings = report.get("findings", [])
 blocking = [
-    f for f in findings
+    f
+    for f in findings
     if f.get("severity") == "error" and f.get("rule_id") not in ACCEPTED
 ]
 
@@ -117,6 +118,4 @@ if waived:
 
 if blocking:
     raise SystemExit(1)
-print(
-    f"OK: rashid {shown} found no blocking errors in {config['publish_dir']}/"
-)
+print(f"OK: rashid {shown} found no blocking errors in {config['publish_dir']}/")

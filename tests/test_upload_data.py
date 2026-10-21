@@ -13,11 +13,13 @@ No network, no AWS, no credentials.
 
 Run: python3 tests/test_upload_data.py
 """
+
 import io
 import sys
 import tempfile
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -103,14 +105,16 @@ with tempfile.TemporaryDirectory() as tmp:
         "a/prefix/tiles/roads.pmtiles",
         "a/prefix/dem/tile.tif",
     }
-    check(keys == expected, f"upload set wrong.\n  extra:   {keys - expected}"
-                            f"\n  missing: {expected - keys}")
+    check(
+        keys == expected,
+        f"upload set wrong.\n  extra:   {keys - expected}"
+        f"\n  missing: {expected - keys}",
+    )
 
     # Content types come from publish.py, not from a second table.
     types = {u.key: u.content_type for u in uploads}
     check(
-        types["a/prefix/roads/part-0.parquet"]
-        == "application/vnd.apache.parquet",
+        types["a/prefix/roads/part-0.parquet"] == "application/vnd.apache.parquet",
         "parquet content type comes from publish.py",
     )
     check(
@@ -163,10 +167,13 @@ check("data_dir" in message, f"the template exits on data_dir: {message!r}")
 
 # --- the sentinel guard ------------------------------------------------
 check(
-    unedited_sentinels({
-        "write_prefix": "s3://EXAMPLE-BUCKET/EXAMPLE-PREFIX",
-        "public_base": "https://example.invalid/EXAMPLE-PREFIX",
-    }) != [],
+    unedited_sentinels(
+        {
+            "write_prefix": "s3://EXAMPLE-BUCKET/EXAMPLE-PREFIX",
+            "public_base": "https://example.invalid/EXAMPLE-PREFIX",
+        }
+    )
+    != [],
     "an unedited config is refused",
 )
 
@@ -182,13 +189,13 @@ with tempfile.TemporaryDirectory() as tmp:
     out = io.StringIO()
     argv = sys.argv
     sys.argv = ["upload_data.py", "--confirm"]
-    real_load = upload_data.load_config
-    upload_data.load_config = lambda *a, **k: sentinel_config
     try:
-        with redirect_stdout(out):
+        with (
+            redirect_stdout(out),
+            patch.object(upload_data, "load_config", return_value=sentinel_config),
+        ):
             code = upload_data.main()
     finally:
-        upload_data.load_config = real_load
         sys.argv = argv
     check(code == 1, f"the sentinel guard refuses to upload, got {code}")
     check(

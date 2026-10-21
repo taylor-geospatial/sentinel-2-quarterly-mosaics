@@ -36,7 +36,6 @@ Uploads run on a bounded thread pool of MAX_UPLOAD_WORKERS threads. A failed
 object is named on stderr and the run exits non-zero. One failure does not
 stop the other uploads.
 """
-from __future__ import annotations
 
 import argparse
 import hashlib
@@ -45,6 +44,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "catalog.publish.yaml"
@@ -86,6 +86,14 @@ MAX_UPLOAD_WORKERS = 16
 # Progress is printed every this many objects, not once per object, so a
 # publish of thousands of files stays readable.
 PROGRESS_EVERY = 100
+
+
+class UploadClient(Protocol):
+    """The S3 client operation used by upload workers and test doubles."""
+
+    def upload_file(
+        self, local: str, bucket: str, key: str, /, *, ExtraArgs: dict[str, str]
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -193,7 +201,7 @@ def split_s3_uri(uri: str) -> tuple[str, str]:
     """Split s3://bucket/some/prefix into ("bucket", "some/prefix")."""
     if not uri.startswith("s3://"):
         sys.exit(f"write_prefix must start with s3:// — got {uri!r}")
-    rest = uri[len("s3://"):].strip("/")
+    rest = uri[len("s3://") :].strip("/")
     bucket, _, prefix = rest.partition("/")
     if not bucket:
         sys.exit(f"write_prefix names no bucket — got {uri!r}")
@@ -249,7 +257,7 @@ def collect_uploads(config: dict[str, str], root: Path = ROOT) -> list[Upload]:
 
 
 def md5(path: Path) -> str:
-    digest = hashlib.md5()  # noqa: S324 - matches S3 ETag, not a security use
+    digest = hashlib.md5()  # S3 ETag comparison, not a security use.
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -309,6 +317,7 @@ def s3_client(session, config: dict[str, str]):
     bucket = config.get("write_prefix", "").removeprefix("s3://").partition("/")[0]
     if path_style(bucket):
         from botocore.config import Config
+
         kwargs["config"] = Config(s3={"addressing_style": "path"})
     return session.client(
         "s3", endpoint_url=config.get("endpoint_url") or None, **kwargs
@@ -330,14 +339,15 @@ def remote_index(
     except ImportError:
         print("note: boto3 is not installed; treating every file as changed")
         return {}
-    except Exception as exc:  # noqa: BLE001 - any failure means "unknown"
+    except Exception as exc:
         print(f"note: could not list s3://{bucket}/{prefix} ({exc});")
         print("      treating every file as changed")
         return {}
 
 
-def upload_all(session, bucket: str, uploads: list[Upload],
-               config: dict[str, str]) -> list[str]:
+def upload_all(
+    session, bucket: str, uploads: list[Upload], config: dict[str, str]
+) -> list[str]:
     """Upload every object on a bounded pool. Returns the keys that failed.
 
     Every upload is attempted. One failure does not cancel the rest, so the
@@ -350,7 +360,7 @@ def upload_all(session, bucket: str, uploads: list[Upload],
     thread_state = threading.local()
     new_client = threading.Lock()
 
-    def client() -> object:
+    def client() -> UploadClient:
         existing = getattr(thread_state, "client", None)
         if existing is not None:
             return existing
@@ -376,10 +386,9 @@ def upload_all(session, bucket: str, uploads: list[Upload],
             done += 1
             try:
                 future.result()
-            except Exception as exc:  # noqa: BLE001 - report, do not abort
+            except Exception as exc:
                 failures.append(upload.key)
-                print(f"  FAILED  {upload.key}: {exc}", file=sys.stderr,
-                      flush=True)
+                print(f"  FAILED  {upload.key}: {exc}", file=sys.stderr, flush=True)
             if done % PROGRESS_EVERY == 0 or done == total:
                 print(f"  {done}/{total} done", flush=True)
     return failures
@@ -390,9 +399,7 @@ def main() -> int:
         description="Sync the published directory to object storage, 1:1.",
         epilog="Dry run by default. Never deletes.",
     )
-    parser.add_argument(
-        "--confirm", action="store_true", help="actually upload"
-    )
+    parser.add_argument("--confirm", action="store_true", help="actually upload")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -403,7 +410,7 @@ def main() -> int:
         choices=("config", "direct"),
         default="config",
         help="direct: translate a proxy-form target to the direct "
-             "S3 bucket; the keys do not change",
+        "S3 bucket; the keys do not change",
     )
     parser.add_argument(
         "--profile", help="AWS profile; overrides the profile in the config"
@@ -427,8 +434,7 @@ def main() -> int:
     bucket, prefix = split_s3_uri(config["write_prefix"])
     uploads = collect_uploads(config)
     if not uploads:
-        print(f"nothing under {config['publish_dir']}/ to publish",
-              file=sys.stderr)
+        print(f"nothing under {config['publish_dir']}/ to publish", file=sys.stderr)
         return 1
 
     index = {} if args.force else remote_index(bucket, prefix, config)
@@ -458,13 +464,12 @@ def main() -> int:
         session = aws_session(config)
     except ImportError:
         sys.exit("boto3 is required to upload. Run: pip install boto3")
-    except Exception as exc:  # noqa: BLE001 - stop before any upload
+    except Exception as exc:
         sys.exit(f"cannot build an AWS session: {exc}")
 
     failed = upload_all(session, bucket, changed, config)
     if failed:
-        print(f"\n{len(failed)} of {len(changed)} file(s) failed:",
-              file=sys.stderr)
+        print(f"\n{len(failed)} of {len(changed)} file(s) failed:", file=sys.stderr)
         for key in sorted(failed):
             print(f"  {key}", file=sys.stderr)
         return 1

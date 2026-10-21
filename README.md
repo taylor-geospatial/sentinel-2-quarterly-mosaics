@@ -1,95 +1,61 @@
 # Sentinel-2 Quarterly Cloudless Mosaics
 
-The [Portolan](https://www.portolan-sdi.org/) catalog for
-[`tge-labs/sentinel-2-quarterly-cloudless-mosaics`](https://source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics)
-on Source Cooperative: a full mirror of the Copernicus Sentinel-2 Global
-Mosaics, 36 quarters from 2017 Q1 through 2025 Q4, 4,070,300 Cloud-Optimized
-GeoTIFFs over 1,017,575 mosaic tiles, 607.5 TB.
+This repository maintains the [Portolan](https://www.portolan-sdi.org/) catalog and processing tools for [`tge-labs/sentinel-2-quarterly-cloudless-mosaics`](https://source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics) on Source Cooperative.
+The mirror contains four bands of the Copernicus Sentinel-2 Global Mosaics for 36 quarters, from 2017 Q1 through 2025 Q4.
+It holds 4,070,300 Cloud-Optimized GeoTIFFs across 1,017,575 mosaic tiles, totaling 607.5 TB.
 
-This repository holds the catalog metadata and the tools that generate it. The
-imagery is already in the bucket. Nothing here moves 607 TB.
+The European Space Agency produces the mosaics, the Copernicus Data Space Ecosystem publishes them, and Taylor Geospatial Engine hosts this copy.
+The imagery is available over HTTPS without credentials.
+See the [data guide](catalog/README.md) for access examples, coverage, and provenance, or the [catalog agent guide](catalog/AGENTS.md) for tested queries.
+Open the [map viewer](http://research.taylorgeospatial.org/sentinel-2-quarterly-mosaics/) to browse the imagery.
+The [viewer source](apps/viewer) includes its [local development server](apps/viewer/devserver.py).
 
-**Start at [`catalog/README.md`](catalog/README.md)** for what the data is and
-how to read it, or [`catalog/AGENTS.md`](catalog/AGENTS.md) if you are an agent
-about to query it.
+## Development
 
-**`catalog/` is the published catalog.** Everything in it is published.
-Everything outside it never is. That boundary is the whole publish contract,
-and `tools/publish.py` has no flag or config key that widens it.
+Use Python 3.12, matching CI.
 
-## Layout
-
-| Path | What it is |
-|---|---|
-| `catalog/` | The published tree, synced 1:1 to the bucket prefix |
-| `catalog/mosaics/` | The imagery collection: bands, item index, per-quarter partitions |
-| `catalog/coverage/` | Tile footprints and per-tile, per-quarter statistics |
-| `catalog.publish.yaml` | Where it publishes, and under what public URL |
-| `tools/publish.py` | The metadata sync. Dry run by default |
-| `tools/upload_data.py` | The data upload. Dry run by default |
-| `tests/` | The gates CI runs on every pull request |
-| `docs/conformance.md` | Any validator finding this catalog accepts, and why |
-
-## What publishes where
-
-The catalog publishes into the existing product root, beside the imagery it
-describes:
-
-```
-s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/     (via https://data.source.coop)
-https://data.source.coop/tge-labs/sentinel-2-quarterly-cloudless-mosaics/
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --group dev
+ruff check .
+ruff format --check .
+ty check
+CI_LIGHT=1 python tests/run_all.py
 ```
 
-Source Cooperative is a data proxy rather than plain S3, so the bucket is the
-account name and the product slug is the key prefix. `catalog.publish.yaml`
-carries `endpoint_url: https://data.source.coop`, and the credentials the
-`source-coop` CLI issues are STS tokens valid against that endpoint alone.
-
-The `{year}/{Qn}/{tile}/` imagery directories, `manifest/`, `_status/` and
-`_benchmarks/` were written by the transfer job and are not touched by this
-repository. `tools/publish.py` never deletes, so it cannot disturb them.
+Leave `CI_LIGHT` unset when the referenced data files are present locally to run the full link check.
+The [conformance notes](docs/conformance.md) explain the metadata-only checks and validator exceptions.
+For imagery processing and backfills, use the [RAILS setup and job instructions](tools/rails/README.md).
 
 ## Publish
+
+`tools/publish.py` uploads the contents of `catalog/` to the existing product prefix.
+It never deletes remote objects.
+Use `--force` to skip listing the prefix's more than four million objects.
 
 ```bash
 python3 tools/publish.py --force            # dry run: what would upload
 python3 tools/publish.py --force --confirm  # upload; needs AWS credentials
 ```
 
-`--force` is not optional here. Without it, `publish.py` paginates
-`list_objects_v2` over the whole write prefix to work out what changed, and this
-prefix holds over four million objects, so the command appears to hang. `--force`
-skips the listing and re-uploads all 11 catalog files, which at this size is far
-cheaper than the listing it avoids.
+[`catalog.publish.yaml`](catalog.publish.yaml) defines the destination and the `https://data.source.coop` endpoint.
+See the [RAILS credential setup](tools/rails/README.md#credentials) for authentication and [repository agent instructions](AGENTS.md) for publishing constraints.
+Removing a local file does not remove its published copy.
 
-It never deletes. Removing a file from `catalog/` does not unpublish it, so
-delete the object yourself if that is what you meant.
+## Repository layout
 
-## Test
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install 'rashid>=0.1.8,<0.2.0' stac-check
-PATH="$PWD/.venv/bin:$PATH" python3 tests/run_all.py
-```
-
-| Gate | What it checks |
+| Path | Contents |
 |---|---|
-| `test_links.py` | Every relative link and asset href resolves |
-| `test_publish.py` | Nothing outside `catalog/` can be uploaded |
-| `test_upload_data.py` | Only staged files with an allowed suffix upload |
-| `test_stac_valid.py` | Valid STAC 1.1.0, via `stac-check` |
-| `test_conformance.py` | Portolan conformance, via `rashid` |
-
-`rashid` 0.1.8 is the floor, because it is the first version that accepts the
-absolute root `self` link that Portolan schema v0.2.0 recommends. CI installs
-the same range the gate enforces.
-
-Leave `CI_LIGHT` unset locally so the full link check runs. CI sets it, because
-a fresh checkout has the metadata and not the 607 TB the asset hrefs point at.
+| `catalog/` | Published metadata, data guides, and collection definitions |
+| `catalog/mosaics/` | Imagery collection and per-quarter partitions |
+| `catalog/coverage/` | Tile footprints and per-tile, per-quarter statistics |
+| `apps/viewer/` | Static map viewer |
+| `tools/` | Catalog generation, data processing, and upload tools |
+| `tests/` | Catalog and tooling checks |
 
 ## License
 
-Apache-2.0, covering the tooling in this repository. The imagery carries the
-[Copernicus Sentinel Data Legal Notice](https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice),
-which `catalog/README.md` states in full.
+The repository tooling uses Apache-2.0.
+The imagery uses the [Copernicus Sentinel Data Legal Notice](https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice), summarized in the [data guide](catalog/README.md#license).

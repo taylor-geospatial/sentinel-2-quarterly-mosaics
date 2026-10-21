@@ -37,7 +37,6 @@ what the uploader and `quarter.sbatch`'s resume rely on.
 A quarter whose `items.parquet` already exists is not rebuilt; pass
 `--force` to replace it.
 """
-from __future__ import annotations
 
 import argparse
 import os
@@ -70,8 +69,7 @@ def stage(con, ndjson: Path, staged: Path) -> int:
     Compression here is zstd-1: this file is read once, by gpio, and
     deleted. Spending level 18 on it would double the build for nothing.
     """
-    casts = ", ".join(f'CAST("{n}" AS {t}) AS "{n}"'
-                      for n, t, _ in schema.DATA_COLUMNS)
+    casts = ", ".join(f'CAST("{n}" AS {t}) AS "{n}"' for n, t, _ in schema.DATA_COLUMNS)
     con.execute(f"""
         COPY (
           SELECT {casts},
@@ -79,8 +77,7 @@ def stage(con, ndjson: Path, staged: Path) -> int:
           FROM read_ndjson('{ndjson}', maximum_object_size={MAX_OBJECT})
         ) TO '{staged}' (FORMAT PARQUET, COMPRESSION zstd, COMPRESSION_LEVEL 1)
     """)
-    return con.execute(
-        f"SELECT count(*) FROM read_parquet('{staged}')").fetchone()[0]
+    return con.execute(f"SELECT count(*) FROM read_parquet('{staged}')").fetchone()[0]
 
 
 def sort_and_check(con, staged: Path, final: Path, memory: str) -> None:
@@ -90,29 +87,44 @@ def sort_and_check(con, staged: Path, final: Path, memory: str) -> None:
     try:
         con.execute(f"SET memory_limit='{GPIO_HANDOFF}';")
         t0 = time.monotonic()
-        cmd = ["gpio", "sort", "column", str(staged), str(tmp),
-               schema.SORT_KEY,
-               "--geoparquet-version", "2.0",
-               "--compression", "zstd",
-               "--compression-level", str(schema.ZSTD_LEVEL),
-               "--row-group-size", str(schema.ROW_GROUP_SIZE),
-               "--write-memory", memory]
+        cmd = [
+            "gpio",
+            "sort",
+            "column",
+            str(staged),
+            str(tmp),
+            schema.SORT_KEY,
+            "--geoparquet-version",
+            "2.0",
+            "--compression",
+            "zstd",
+            "--compression-level",
+            str(schema.ZSTD_LEVEL),
+            "--row-group-size",
+            str(schema.ROW_GROUP_SIZE),
+            "--write-memory",
+            memory,
+        ]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
             sys.exit(f"gpio sort failed for {final.parent.name}")
-        say(f"{final.parent.name}: sorted ({schema.SORT_KEY}), zstd-"
+        say(
+            f"{final.parent.name}: sorted ({schema.SORT_KEY}), zstd-"
             f"{schema.ZSTD_LEVEL}, {tmp.stat().st_size / 1e6:,.1f} MB, "
-            f"{time.monotonic() - t0:,.1f}s")
+            f"{time.monotonic() - t0:,.1f}s"
+        )
 
         t0 = time.monotonic()
-        chk = subprocess.run(["gpio", "check", "all", str(tmp)],
-                             capture_output=True, text=True)
+        chk = subprocess.run(
+            ["gpio", "check", "all", str(tmp)], capture_output=True, text=True
+        )
         if chk.returncode != 0:
             print(chk.stdout[-2000:], chk.stderr[-2000:], file=sys.stderr)
             sys.exit(f"gpio check failed for {final.parent.name}")
-        say(f"{final.parent.name}: gpio check all passed, "
-            f"{time.monotonic() - t0:,.1f}s")
+        say(
+            f"{final.parent.name}: gpio check all passed, {time.monotonic() - t0:,.1f}s"
+        )
         os.replace(tmp, final)
     finally:
         con.execute(f"SET memory_limit='{memory}';")
@@ -122,6 +134,7 @@ def sort_and_check(con, staged: Path, final: Path, memory: str) -> None:
 def summarise(con, final: Path) -> None:
     """What landed: rows, row groups, tiles, and the geo metadata version."""
     import json
+
     rows, tiles = con.execute(f"""
         SELECT count(*), count(DISTINCT _tile) FROM read_parquet('{final}')
     """).fetchone()
@@ -134,11 +147,14 @@ def summarise(con, final: Path) -> None:
     version = "none"
     if geo:
         raw = geo[0][0]
-        version = json.loads(raw.decode() if isinstance(raw, bytes) else raw
-                             ).get("version", "?")
-    say(f"{final.parent.name}: {rows:,} row(s), {tiles:,} MGRS cell(s), "
+        version = json.loads(raw.decode() if isinstance(raw, bytes) else raw).get(
+            "version", "?"
+        )
+    say(
+        f"{final.parent.name}: {rows:,} row(s), {tiles:,} MGRS cell(s), "
         f"{groups} row group(s), {final.stat().st_size / 1e6:,.1f} MB, "
-        f"geo metadata version {version}")
+        f"geo metadata version {version}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -147,14 +163,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quarter", required=True, choices=sorted(schema.QUARTER_MONTHS))
     ap.add_argument("--work", required=True, help="where make_items.py wrote")
     ap.add_argument("--out", required=True, help="the publish tree")
-    ap.add_argument("--memory", default=DEFAULT_MEMORY,
-                    help=f"DuckDB limit and gpio write budget (default "
-                         f"{DEFAULT_MEMORY})")
-    ap.add_argument("--force", action="store_true",
-                    help="rebuild a quarter whose items.parquet exists")
+    ap.add_argument(
+        "--memory",
+        default=DEFAULT_MEMORY,
+        help=f"DuckDB limit and gpio write budget (default {DEFAULT_MEMORY})",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="rebuild a quarter whose items.parquet exists",
+    )
     a = ap.parse_args(argv)
 
     import duckdb
+
     part = f"quarter={a.year}.{a.quarter}"
     ndjson = Path(a.work) / part / "items.ndjson"
     if not ndjson.is_file():
@@ -178,9 +200,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         t0 = time.monotonic()
         rows = stage(con, ndjson, staged)
-        say(f"{part}: staged {rows:,} row(s), "
+        say(
+            f"{part}: staged {rows:,} row(s), "
             f"{staged.stat().st_size / 1e6:,.1f} MB, "
-            f"{time.monotonic() - t0:,.1f}s")
+            f"{time.monotonic() - t0:,.1f}s"
+        )
         sort_and_check(con, staged, final, a.memory)
         summarise(con, final)
     finally:

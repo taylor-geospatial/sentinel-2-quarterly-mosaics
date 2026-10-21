@@ -9,7 +9,7 @@
   ],
   "id": "coverage",
   "title": "Tile footprints and per-quarter coverage",
-  "description": "What exists where, for the `mosaics` collection: one row per mosaic tile per quarter, and one polygon per mosaic tile. This is the cheap first stop. A client that wants to know which quarters cover a place, or how much of a tile carries real pixels, reads this instead of listing a million-object prefix or opening 36 rasters.\n\n`tiles.parquet` holds the per-tile, per-quarter table, sorted by tile and then quarter so one tile's whole 36-quarter history is a contiguous run and a single range read answers \"what do I have here, over time\". Its size columns come from the transfer manifests, which record the byte size of every object that landed. `valid_fraction` is the one column that needs the rasters: it is measured from the smallest internal overview of the red band, 313 x 313 pixels, by counting pixels that are not the `-32768` nodata value. That is a 0.1 megapixel read per tile rather than a 100 megapixel one, and it is what makes the measure affordable over a million tiles.\n\n`footprints.pmtiles` carries one polygon per mosaic tile, in the true mosaic grid rather than a bounding envelope, with the count of quarters present on each. It is a fixed geometry: a client joins the table onto it by `subtile` and the tileset does not change when the statistics are recomputed.\n\n**Nothing here is published yet.** `table:row_count` is 0 and both data assets are declared without `file:size` or `file:checksum`, because the bytes do not exist. The schema below is the contract the generator writes to, not a description of a file you can read today. Until it lands, the per-quarter transfer manifests at `manifest/manifest_{year}_{Qn}.parquet` answer the size and presence questions, and the agent guide shows how.\n\nDerived from the Copernicus Sentinel-2 Global Mosaics. Contains modified Copernicus Sentinel data.",
+  "description": "What exists where, for the `mosaics` collection: one row per mosaic tile per quarter, and one polygon per mosaic tile. This is the cheap first stop. A client that wants to know which quarters cover a place, or how much of a tile carries real pixels, reads this instead of listing a million-object prefix or opening 36 rasters.\n\n`tiles.parquet` holds the per-tile, per-quarter table, sorted by tile and then quarter so one tile's available history is a contiguous run and a single range read answers \"what do I have here, over time\". Its size columns come from the transfer manifests, which record the byte size of every object that landed. `valid_fraction` is the one column that needs the rasters: it is measured from the smallest internal overview of the red band, 313 x 313 pixels, by counting pixels that are not the `-32768` nodata value. That is a 0.1 megapixel read per tile rather than a 100 megapixel one, and it is what makes the measure affordable over a million tiles.\n\n`footprints.pmtiles` carries one polygon per mosaic tile, in the true mosaic grid rather than a bounding envelope, with the count of quarters present on each. It is a fixed geometry: a client joins the table onto it by `subtile` and the tileset does not change when the statistics are recomputed.\n\nThe published table was verified on 2026-10-20: 912,320 rows across 34,423 mosaic tiles and 32 quarters, 2018 Q1 through 2025 Q4. `valid_fraction` is measured for 64,000 rows and NULL for the rest. The footprints tileset has 34,423 features in its `footprints` layer. The 2017 imagery exists in the mirror but is not in these coverage derivatives; use its transfer manifests for presence and sizes. An absent coverage row outside the table's temporal extent does not mean the imagery is missing.\n\nDerived from the Copernicus Sentinel-2 Global Mosaics. Contains modified Copernicus Sentinel data.",
   "license": "other",
   "keywords": [
     "sentinel-2",
@@ -21,7 +21,7 @@
     "pmtiles",
     "statistics"
   ],
-  "updated": "2026-09-28T10:31:47Z",
+  "updated": "2026-10-20T00:00:00Z",
   "providers": [
     {
       "name": "European Space Agency (ESA)",
@@ -53,29 +53,29 @@
     "spatial": {
       "bbox": [
         [
-          -180,
-          -90,
-          180,
-          90
+          -180.0,
+          -83.748883,
+          180.0,
+          83.748345
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2017-01-01T00:00:00Z",
+          "2018-01-01T00:00:00Z",
           "2025-12-31T23:59:59Z"
         ]
       ]
     }
   },
   "table:primary_geometry": "geometry",
-  "table:row_count": 0,
+  "table:row_count": 912320,
   "table:columns": [
     {
       "name": "subtile",
       "type": "string",
-      "description": "The mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. Join key against the `footprints.pmtiles` feature id and against `_subtile` in the mosaics item index. With `quarter`, it is the unique key of this table."
+      "description": "The mosaic tile id, `{MGRS}_{i}_{j}`, for example `31UFU_0_0`. Join key against the `footprints.pmtiles` feature property `subtile` and against `_subtile` in the mosaics item index. With `quarter`, it is the unique key of this table."
     },
     {
       "name": "mgrs_tile",
@@ -141,7 +141,9 @@
       "roles": [
         "data"
       ],
-      "description": "One row per mosaic tile per quarter, sorted by subtile then quarter so one tile's 36-quarter history is a contiguous run. Not published yet; see the collection description."
+      "description": "One row per mosaic tile per quarter, sorted by subtile then quarter so one tile's available history is a contiguous run.",
+      "file:size": 27763154,
+      "file:checksum": "1220e413f9c88c6fe8b940fbd207494d1d12d37d0af5b9ceb74275477d7eb10bb38a"
     },
     "pmtiles": {
       "href": "./footprints.pmtiles",
@@ -150,10 +152,12 @@
       "roles": [
         "visual"
       ],
-      "description": "One polygon per mosaic tile, on the true mosaic grid, carrying the count of quarters present. Join the coverage table onto it by `subtile`. Not published yet; see the collection description.",
+      "description": "One polygon per mosaic tile, on the true mosaic grid, carrying the count of quarters present. Join the coverage table onto it by `subtile`.",
       "pmtiles:layers": [
         "footprints"
-      ]
+      ],
+      "file:size": 13475623,
+      "file:checksum": "1220abb77e5677410dfcf04f329057e19c0d65fb63f0d67dc22daeea052b0ab86669"
     },
     "style-default": {
       "href": "./styles/default.json",
@@ -166,6 +170,15 @@
       "file:size": 1146,
       "file:checksum": "122088c45aea0b9c1f171883f4b65775291de81e1ac6180c7b9367202d84c1d499ec",
       "description": "Paints each mosaic tile by `quarters_present` in six steps, so the map reads as how much of the 36-quarter record covers a place rather than as a flat footprint."
+    },
+    "thumbnail": {
+      "href": "./thumbnail.webp",
+      "type": "image/webp",
+      "title": "Mosaic tile coverage, 2018 Q1 to 2025 Q4",
+      "roles": [
+        "thumbnail"
+      ],
+      "description": "Rendered from the published tiles.parquet verified on 2026-10-20: distinct quarters per subtile, using the default style fill colours, opacity and background in Web Mercator. 34,423 footprints across 32 quarters; a footprint shows tile presence, not the fraction of valid pixels."
     }
   },
   "links": [
