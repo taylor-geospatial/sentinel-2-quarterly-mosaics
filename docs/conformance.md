@@ -33,11 +33,10 @@ The validator workarounds below do not add accepted catalog deviations.
 
 ## Coverage derivatives
 
-The published `tiles.parquet` and `footprints.pmtiles` were downloaded and measured on 2026-10-20.
-The table contains 912,320 rows across 32 quarters, from 2018 Q1 through 2025 Q4, and 34,423 mosaic tiles.
-The PMTiles metadata reports the same footprint count.
+`tiles.parquet` and `footprints.pmtiles` were rebuilt with 2017 Q1–Q4 added and measured on 2026-11-04.
+The table contains 1,017,575 rows across 36 quarters, from 2017 Q1 through 2025 Q4, and 34,916 mosaic tiles.
+The PMTiles build reported the same footprint count.
 The collection records the measured row count, extent, sizes, and checksums.
-The coverage guides document that the table excludes 2017 imagery.
 
 The thumbnail renders this table in Web Mercator using the default style's quarter-count fill colors, opacity, and background.
 It shows tile presence rather than valid-pixel fraction.
