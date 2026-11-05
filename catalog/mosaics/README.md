@@ -7,7 +7,8 @@ See the [catalog README](../README.md) for provenance, access, licensing, and co
 ## Tile layout
 
 A mosaic tile is 10008 × 10008 pixels at 10 m, about 100 km square, projected in its MGRS cell's UTM zone.
-Tiles are stored at the top level of the bucket under `{year}/{Qn}/`, not under `mosaics/`, which contains only this collection's metadata and per-quarter index files.
+Tiles are stored at the top level of the bucket under `{year}/{Qn}/`.
+The `mosaics/` prefix contains only this collection's metadata and per-quarter index files.
 Each tile directory contains a single-band COG for B02, B03, B04, and B08, plus the tile's STAC item JSON:
 
 ```

@@ -22,12 +22,12 @@ manifest/, _status/                       transfer records
 ```
 
 The `mosaics/` and `coverage/` directories contain catalog metadata and small derived files, not imagery.
-For example, `mosaics/quarter=2024.Q2/items.parquet` lists the 2024 Q2 tiles, and its hrefs point to the band files under `2024/Q2/`.
+`mosaics/quarter=2024.Q2/items.parquet` lists the 2024 Q2 tiles, and its hrefs point to the band files under `2024/Q2/`.
 
 ## Composite values
 
 For each pixel and band, the upstream algorithm gathers Sentinel-2 Level-2A surface reflectance observations from the three-month window.
-It removes observations that the scene classification layer marks as cloud and outputs the first quartile of the remaining values.
+It drops observations flagged as cloud in the Level-2A scene classification and outputs the first quartile of the remaining values.
 Pixels with no valid observation are left empty.
 
 Using the 25th percentile instead of the mean reduces the effect of missed clouds and haze, which are brighter than the surface.
@@ -148,7 +148,7 @@ Sync checks compare manifests to detect later upstream changes.
 
 ## Collections
 
-- [`mosaics`](mosaics/collection.json) describes the imagery: band definitions, tile geometry, and one partition per quarter with its item index.
+- [`mosaics`](mosaics/collection.json) describes the bands and tile geometry of the imagery, and has one partition per quarter with its item index.
   See its [README](mosaics/README.md) and [agent guide](mosaics/AGENTS.md).
 - [`coverage`](coverage/collection.json) has tile footprints and per-tile, per-quarter statistics.
   See its [README](coverage/README.md) and [agent guide](coverage/AGENTS.md).
