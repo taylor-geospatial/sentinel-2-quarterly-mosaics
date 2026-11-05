@@ -29,7 +29,7 @@
     "mgrs",
     "esa"
   ],
-  "updated": "2026-09-30T04:31:00Z",
+  "updated": "2026-11-05T00:06:53Z",
   "providers": [
     {
       "name": "European Space Agency (ESA)",
@@ -246,13 +246,13 @@
     {
       "name": "quarter",
       "type": "string",
-      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The `_subtile` tiebreak is what makes the order deterministic: `datetime` is constant inside a quarter file, and some MGRS cells carry more than one mosaic tile, so `_tile` and `datetime` alone leave those rows unordered. The dot rather than a hyphen keeps the value sorting in calendar order as a string. `partition:glob` names the Source Cooperative data proxy, where the bucket is the account and the product slug is the key prefix, so a client reaches it anonymously with the endpoint set to `https://data.source.coop` and path-style addressing; the agent guide gives the DuckDB settings. No partition file is published yet; each quarter gains its `item` link and its file as the backfill reaches it."
+      "description": "The mosaic quarter, written `YYYY.Qn`, for example `2024.Q2`. One `items.parquet` per quarter, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's whole history is a contiguous run and a tile lookup reads a small number of row groups. The `_subtile` tiebreak is what makes the order deterministic: `datetime` is constant inside a quarter file, and some MGRS cells carry more than one mosaic tile, so `_tile` and `datetime` alone leave those rows unordered. The dot rather than a hyphen keeps the value sorting in calendar order as a string. `partition:glob` names the Source Cooperative data proxy, where the bucket is the account and the product slug is the key prefix, so a client reaches it anonymously with the endpoint set to `https://data.source.coop` and path-style addressing; the agent guide gives the DuckDB settings."
     }
   ],
-  "partition:file_count": 18,
+  "partition:file_count": 36,
   "partition:glob": "s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/mosaics/quarter=*/items.parquet",
   "table:primary_geometry": "geometry",
-  "table:row_count": 521378,
+  "table:row_count": 1017575,
   "table:columns": [
     {
       "name": "id",
@@ -431,6 +431,108 @@
     },
     {
       "rel": "item",
+      "href": "./quarter=2017.Q1/2017.Q1.json",
+      "type": "application/geo+json",
+      "title": "2017 Q1 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2017.Q2/2017.Q2.json",
+      "type": "application/geo+json",
+      "title": "2017 Q2 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2017.Q3/2017.Q3.json",
+      "type": "application/geo+json",
+      "title": "2017 Q3 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2017.Q4/2017.Q4.json",
+      "type": "application/geo+json",
+      "title": "2017 Q4 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2018.Q1/2018.Q1.json",
+      "type": "application/geo+json",
+      "title": "2018 Q1 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2018.Q2/2018.Q2.json",
+      "type": "application/geo+json",
+      "title": "2018 Q2 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2018.Q3/2018.Q3.json",
+      "type": "application/geo+json",
+      "title": "2018 Q3 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2018.Q4/2018.Q4.json",
+      "type": "application/geo+json",
+      "title": "2018 Q4 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2019.Q1/2019.Q1.json",
+      "type": "application/geo+json",
+      "title": "2019 Q1 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2019.Q2/2019.Q2.json",
+      "type": "application/geo+json",
+      "title": "2019 Q2 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2019.Q3/2019.Q3.json",
+      "type": "application/geo+json",
+      "title": "2019 Q3 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2019.Q4/2019.Q4.json",
+      "type": "application/geo+json",
+      "title": "2019 Q4 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2020.Q1/2020.Q1.json",
+      "type": "application/geo+json",
+      "title": "2020 Q1 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2020.Q2/2020.Q2.json",
+      "type": "application/geo+json",
+      "title": "2020 Q2 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2020.Q3/2020.Q3.json",
+      "type": "application/geo+json",
+      "title": "2020 Q3 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2020.Q4/2020.Q4.json",
+      "type": "application/geo+json",
+      "title": "2020 Q4 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2021.Q1/2021.Q1.json",
+      "type": "application/geo+json",
+      "title": "2021 Q1 partition"
+    },
+    {
+      "rel": "item",
       "href": "./quarter=2021.Q2/2021.Q2.json",
       "type": "application/geo+json",
       "title": "2021 Q2 partition"
@@ -476,6 +578,12 @@
       "href": "./quarter=2023.Q1/2023.Q1.json",
       "type": "application/geo+json",
       "title": "2023 Q1 partition"
+    },
+    {
+      "rel": "item",
+      "href": "./quarter=2023.Q2/2023.Q2.json",
+      "type": "application/geo+json",
+      "title": "2023 Q2 partition"
     },
     {
       "rel": "item",

@@ -1,0 +1,113 @@
+{
+  "type": "Feature",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://schemas.portolan-sdi.org/incubating/partition/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
+  ],
+  "id": "2023.Q2",
+  "collection": "mosaics",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -180,
+          -90
+        ],
+        [
+          180,
+          -90
+        ],
+        [
+          180,
+          90
+        ],
+        [
+          -180,
+          90
+        ],
+        [
+          -180,
+          -90
+        ]
+      ]
+    ]
+  },
+  "bbox": [
+    -180,
+    -90,
+    180,
+    90
+  ],
+  "properties": {
+    "datetime": "2023-04-01T00:00:00Z",
+    "start_datetime": "2023-04-01T00:00:00Z",
+    "end_datetime": "2023-06-30T23:59:59Z",
+    "partition:key": {
+      "quarter": "2023.Q2"
+    },
+    "table:row_count": 28310,
+    "updated": "2026-11-05T00:06:53Z"
+  },
+  "assets": {
+    "data": {
+      "href": "./items.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Item index, 2023 Q2",
+      "roles": [
+        "data"
+      ],
+      "description": "One row per mosaic tile of the quarter: 28,310 rows, sorted by `_tile`, then `datetime`, then `_subtile`, so one tile's history is a contiguous run. Columns are documented on the collection's `table:columns`.",
+      "table:row_count": 28310,
+      "file:size": 5296232,
+      "file:checksum": "12203807ddf4d110c4146ac3802fc5efdab492324d4c2729ca952e7c75a5de38b29f"
+    },
+    "overview": {
+      "href": "./overview.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Browse mosaic, 2023 Q2",
+      "roles": [
+        "overview",
+        "visual"
+      ],
+      "description": "The quarter's global browse layer: RGB, JPEG quality 85 with an internal transparency mask, dense tiles, EPSG:3857 at zoom 9 (305.75 m per pixel), 256-pixel internal blocks aligned to the Web Mercator tile grid, with a full overview pyramid. Composited from the published B04, B03 and B02 COGs, stretched 0..2500 reflectance units to 0..255 with exponent 0.55. The mask is 0 where the quarter has no valid observation; a reader that ignores masks shows those pixels black.",
+      "proj:code": "EPSG:3857",
+      "file:size": 1328330296,
+      "file:checksum": "12200550066abef2d6b78d59f94dc133158f8b53a9e2bd1fdeed927f6f0d6f3def90"
+    },
+    "thumbnail": {
+      "href": "./thumbnail.webp",
+      "type": "image/webp",
+      "title": "Global thumbnail, 2023 Q2",
+      "roles": [
+        "thumbnail"
+      ],
+      "file:size": 87502,
+      "file:checksum": "1220825bd3c20f090ca1429073d4e58ae47f0f03a2f37b7d677e7e7260c0ece9e3fe"
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../../catalog.json",
+      "type": "application/json",
+      "title": "Sentinel-2 Quarterly Cloudless Mosaics"
+    },
+    {
+      "rel": "parent",
+      "href": "../collection.json",
+      "type": "application/json",
+      "title": "Quarterly cloudless mosaic tiles"
+    },
+    {
+      "rel": "collection",
+      "href": "../collection.json",
+      "type": "application/json",
+      "title": "Quarterly cloudless mosaic tiles"
+    }
+  ]
+}

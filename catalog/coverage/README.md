@@ -33,23 +33,21 @@ Tiles crossing the antimeridian are split at 180°.
 
 ## Published coverage
 
-The following measurements were verified against the public files on 2026-10-20:
+The following measurements were taken from the files on 2026-11-04:
 
 | Measure | Value |
 |---|---|
-| Table rows | 912,320 |
-| Distinct mosaic tiles | 34,423 |
-| Quarters | 32, from 2018 Q1 through 2025 Q4 |
-| Rows with measured `valid_fraction` | 64,000; the rest are NULL |
-| `tiles.parquet` | 27,763,154 bytes |
-| `footprints.pmtiles` | 13,475,623 bytes; 34,423 features |
+| Table rows | 1,017,575 |
+| Distinct mosaic tiles | 34,916 |
+| Quarters | 36, from 2017 Q1 through 2025 Q4 |
+| Rows with measured `valid_fraction` | 72,000; the rest are NULL |
+| `tiles.parquet` | 30,108,594 bytes |
+| `footprints.pmtiles` | 13,650,317 bytes; 34,916 features |
 
 The collection records sizes and SHA-256 multihashes measured from those published bytes.
 The tileset's `footprints` layer uses a string `subtile` property for joins.
 
-The 2017 imagery exists in the mirror but is absent from these derivatives.
-Use the 2017 transfer manifests for presence and sizes.
-A missing coverage row outside 2018–2025 does not establish that imagery is missing.
+A missing coverage row outside 2017–2025 does not establish that imagery is missing.
 The [agent guide](AGENTS.md) includes a tested coverage query and manifest recipes.
 
 The thumbnail uses the default style to show quarters present per mosaic tile.

@@ -12,8 +12,7 @@ The imagery record contains 4,070,300 band COGs for 36 quarters, from 2017 Q1 th
 Band files use `{year}/{Qn}/{MGRS}_{i}_{j}/{band}.tif`.
 Each completed quarter has a `manifest/manifest_{year}_{Qn}.parquet` and a `_status/{year}/{Qn}/complete.json` marker.
 
-The public collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
-Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
+The collection, checked on 2026-11-04, registers 36 partitions with 1,017,575 item-index rows, one per quarter from 2017 Q1 through 2025 Q4.
 Partition items use `quarter=YYYY.Qn/YYYY.Qn.json`, and their indexes use `quarter=YYYY.Qn/items.parquet`.
 The manifest recipes below cover the full 2017–2025 record.
 

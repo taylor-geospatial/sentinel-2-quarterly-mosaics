@@ -7,7 +7,8 @@ See the [catalog README](../README.md) for provenance, access, licensing, and co
 ## Tile layout
 
 A mosaic tile is 10008 × 10008 pixels at 10 m, about 100 km square, projected in its MGRS cell's UTM zone.
-Each tile directory contains a single-band COG for B02, B03, B04, and B08:
+Tiles are stored at the top level of the bucket under `{year}/{Qn}/`, not under `mosaics/`, which contains only this collection's metadata and per-quarter index files.
+Each tile directory contains a single-band COG for B02, B03, B04, and B08, plus the tile's STAC item JSON:
 
 ```
 2024/Q2/31UFU_0_0/B02.tif
@@ -85,9 +86,7 @@ Observation counts require the original product from CDSE.
 
 ## Item index
 
-The public collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
-Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
-Use the transfer manifests for quarters outside that registered coverage.
+The collection, checked on 2026-11-04, registers 36 partitions with 1,017,575 item-index rows, one per quarter from 2017 Q1 through 2025 Q4.
 
 Each quarter's GeoParquet is stored at `quarter=YYYY.Qn/items.parquet` and sorted by `_tile`, `datetime`, then `_subtile`.
 The `_subtile` field orders mosaic tiles sharing an MGRS cell, since `datetime` is constant within a quarter.

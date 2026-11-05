@@ -8,16 +8,16 @@ Read the [catalog agent guide](../AGENTS.md) for DuckDB settings and manifest co
 
 ## Published coverage
 
-Measurements of the public `tiles.parquet` on 2026-10-20 found 912,320 rows, 34,423 distinct `subtile` values, and 32 quarters from `2018.Q1` through `2025.Q4`.
+Measurements of `tiles.parquet` on 2026-11-04 found 1,017,575 rows, 34,916 distinct `subtile` values, and 36 quarters from `2017.Q1` through `2025.Q4`.
 There were no duplicate `(subtile, quarter)` pairs.
-`valid_fraction` was measured for 64,000 rows and NULL for the rest.
+`valid_fraction` was measured for 72,000 rows and NULL for the rest.
 
-The PMTiles metadata reports 34,423 features in the `footprints` layer.
+The PMTiles build reported 34,916 features in the `footprints` layer.
 Each feature has `subtile`, `mgrs_tile`, `quarters_present`, `first_quarter`, and `last_quarter` properties.
 Join on the string `subtile` property.
-Quarter counts range from 1 to 32, and the collection records measured sizes and checksums for both files.
+Quarter counts range from 1 to 36, and the collection records measured sizes and checksums for both files.
 
-The following query ran against the public file on 2026-10-20 and returned 32 rows for `2018.Q1` through `2025.Q4`:
+The following query ran against the file on 2026-11-04 and returned 36 rows for `2017.Q1` through `2025.Q4`:
 
 ```sql
 INSTALL httpfs; LOAD httpfs;
@@ -30,15 +30,12 @@ WHERE subtile = '31UFU_0_0'
 ORDER BY quarter;
 ```
 
-The 2017 imagery is absent from these coverage derivatives.
-Use the manifests when the question includes 2017.
-
 ## Manifest queries
 
-### Tile history including 2017
+### Tile history from the manifests
 
-The coverage table provides the 2018–2025 history.
-Including 2017 requires reading the 36 manifests, about 100 MB, which took several minutes on a domestic connection.
+The coverage table provides the 2017–2025 history.
+The same history from the 36 manifests reads about 100 MB, which took several minutes on a domestic connection.
 This query returned 36 rows on 2026-09-28:
 
 ```sql
@@ -118,12 +115,12 @@ Use it to rank tiles, not to quantify the fraction of valid pixels.
 
 ### Temporal coverage
 
-The published table covers 2018–2025 and cannot establish tile presence in 2017.
+The table covers 2017–2025.
 Within the covered quarters, a missing row means something different from a present tile with little valid data.
 The latter has a row with a low `valid_fraction` when measured.
 Both can appear empty on a map.
 
-A tile present in all covered quarters has 32 rows, even though the catalog's imagery record starts in 2017.
+A tile present in all covered quarters has 36 rows.
 `2026/Q2/` finished transferring on 2026-09-28 and has a completion marker and manifest, but remains outside this catalog.
 Its 256 × 256 internal blocks differ from the earlier 1024 × 1024 blocks and need to be described before the quarter is included.
 The additional manifest brings the documented glob count to 37 files.

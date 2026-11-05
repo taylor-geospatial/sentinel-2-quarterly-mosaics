@@ -22,13 +22,10 @@ Do not describe this catalog as the source.
 ## Published files
 
 The imagery is complete and readable.
-The public mosaics collection, checked on 2026-10-20, registers 18 partitions with 521,378 item-index rows.
-Its item links cover 2021 Q2 through 2025 Q4 except 2023 Q2.
-Use the manifests for quarters outside that registered index coverage.
+The mosaics collection, checked on 2026-11-04, registers 36 partitions with 1,017,575 item-index rows, one per quarter from 2017 Q1 through 2025 Q4.
 
 The coverage table and footprints are published.
-Measured on 2026-10-20, the table has 912,320 rows across 32 quarters, from 2018 Q1 through 2025 Q4.
-Use the manifests for 2017.
+Measured on 2026-11-04, the table has 1,017,575 rows across 36 quarters, from 2017 Q1 through 2025 Q4.
 The [coverage guide](coverage/AGENTS.md) includes a tested query and measured limits.
 
 The 36 per-quarter manifests for 2017–2025 cover the full imagery record described by this catalog:
@@ -154,7 +151,7 @@ ORDER BY year, quarter;
 The query returned 36 rows, one per quarter from 2017 Q1 through 2025 Q4.
 It took several minutes on a domestic connection, reading roughly 100 MB of manifests.
 Cache the result when repeating the analysis.
-`coverage/tiles.parquet` provides the 2018–2025 portion in one table, but use the manifest query for 2017.
+`coverage/tiles.parquet` provides the same 2017–2025 presence in one table.
 
 ## Manifest columns
 
