@@ -33,7 +33,7 @@ Tiles crossing the antimeridian are split at 180°.
 
 ## Published coverage
 
-The following measurements were taken from the files on 2026-11-04:
+These values were measured from the published files on 2026-11-04.
 
 | Measure | Value |
 |---|---|
@@ -47,7 +47,7 @@ The following measurements were taken from the files on 2026-11-04:
 The collection records sizes and SHA-256 multihashes measured from those published bytes.
 The tileset's `footprints` layer uses a string `subtile` property for joins.
 
-A missing coverage row outside 2017–2025 does not establish that imagery is missing.
+The table has no rows outside 2017–2025, so it says nothing about imagery in other years.
 The [agent guide](AGENTS.md) includes a tested coverage query and manifest recipes.
 
 The thumbnail uses the default style to show quarters present per mosaic tile.

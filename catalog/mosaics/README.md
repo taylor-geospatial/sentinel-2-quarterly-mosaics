@@ -86,7 +86,7 @@ Observation counts require the original product from CDSE.
 
 ## Item index
 
-The collection, checked on 2026-11-04, registers 36 partitions with 1,017,575 item-index rows, one per quarter from 2017 Q1 through 2025 Q4.
+On 2026-11-04 the collection had 36 partitions, one per quarter from 2017 Q1 through 2025 Q4, with 1,017,575 item-index rows in total.
 
 Each quarter's GeoParquet is stored at `quarter=YYYY.Qn/items.parquet` and sorted by `_tile`, `datetime`, then `_subtile`.
 The `_subtile` field orders mosaic tiles sharing an MGRS cell, since `datetime` is constant within a quarter.

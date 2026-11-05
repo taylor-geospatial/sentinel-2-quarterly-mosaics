@@ -8,14 +8,15 @@ Read the [catalog agent guide](../AGENTS.md) for DuckDB settings and manifest co
 
 ## Published coverage
 
-Measurements of `tiles.parquet` on 2026-11-04 found 1,017,575 rows, 34,916 distinct `subtile` values, and 36 quarters from `2017.Q1` through `2025.Q4`.
+On 2026-11-04 `tiles.parquet` had 1,017,575 rows, 34,916 distinct `subtile` values, and 36 quarters from `2017.Q1` through `2025.Q4`.
 There were no duplicate `(subtile, quarter)` pairs.
 `valid_fraction` was measured for 72,000 rows and NULL for the rest.
 
 The PMTiles build reported 34,916 features in the `footprints` layer.
 Each feature has `subtile`, `mgrs_tile`, `quarters_present`, `first_quarter`, and `last_quarter` properties.
 Join on the string `subtile` property.
-Quarter counts range from 1 to 36, and the collection records measured sizes and checksums for both files.
+`quarters_present` ranges from 1 to 36.
+The collection records the size and checksum of both files.
 
 The following query ran against the file on 2026-11-04 and returned 36 rows for `2017.Q1` through `2025.Q4`:
 
@@ -34,8 +35,8 @@ ORDER BY quarter;
 
 ### Tile history from the manifests
 
-The coverage table provides the 2017–2025 history.
-The same history from the 36 manifests reads about 100 MB, which took several minutes on a domestic connection.
+`tiles.parquet` already has this history for 2017–2025.
+Rebuilding it from the 36 manifests reads about 100 MB and took several minutes on a domestic connection.
 This query returned 36 rows on 2026-09-28:
 
 ```sql
@@ -115,9 +116,9 @@ Use it to rank tiles, not to quantify the fraction of valid pixels.
 
 ### Temporal coverage
 
-The table covers 2017–2025.
-Within the covered quarters, a missing row means something different from a present tile with little valid data.
-The latter has a row with a low `valid_fraction` when measured.
+The table covers 2017–2025 only.
+Within those quarters, a missing row means the tile is not in the mirror for that quarter.
+A tile with little valid data still has a row, with a low `valid_fraction` once measured.
 Both can appear empty on a map.
 
 A tile present in all covered quarters has 36 rows.
