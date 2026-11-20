@@ -83,3 +83,10 @@ Relative links would resolve against the public bucket URL rather than the repos
 The root also has an absolute `self` link, which Portolan schema v0.2.0 recommends (PORTO-CORE-081) and v0.1.1 forbids; v0.3.0 keeps the same recommendation.
 Keep the v0.3.0 schema URI on all catalog objects (PORTO-CORE-009).
 Do not mix schema versions across objects, or lower the `rashid` floor below 0.4.0.
+
+Keep `mosaics/collection.json`'s `storage:schemes` entry (`type: custom-s3`, `platform:
+https://data.source.coop`, `bucket: tge-labs`) next to its `s3://` `partition:glob`. Without it,
+rashid cannot list the bucket to expand the glob and silently skips every per-partition data
+check; see "The `mosaics` partition glob needs `storage:schemes` to be listable" in
+`docs/conformance.md`. Any future collection that adds an `s3://`/`gs://`/`az://` `partition:glob`
+against this same non-AWS endpoint needs the same entry.

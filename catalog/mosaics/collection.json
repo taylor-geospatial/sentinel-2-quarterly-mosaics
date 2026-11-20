@@ -11,7 +11,8 @@
     "https://stac-extensions.github.io/processing/v1.2.0/schema.json",
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
-    "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/storage/v2.0.0/schema.json"
   ],
   "id": "mosaics",
   "title": "Quarterly cloudless mosaic tiles",
@@ -251,6 +252,15 @@
   ],
   "partition:file_count": 36,
   "partition:glob": "s3://tge-labs/sentinel-2-quarterly-cloudless-mosaics/mosaics/quarter=*/items.parquet",
+  "storage:schemes": {
+    "source-coop": {
+      "type": "custom-s3",
+      "platform": "https://data.source.coop",
+      "bucket": "tge-labs",
+      "region": "us-west-2",
+      "requester_pays": false
+    }
+  },
   "table:primary_geometry": "geometry",
   "table:row_count": 1017575,
   "table:columns": [

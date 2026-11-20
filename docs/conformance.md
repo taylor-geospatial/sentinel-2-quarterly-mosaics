@@ -60,6 +60,35 @@ The thumbnail's bytes are now published (confirmed by a 2026-11-20 HEAD request 
 tracked `catalog/coverage/thumbnail.webp`, which is byte-identical to the published object.
 The data asset hashes describe files already in the public bucket.
 
+### The `mosaics` partition glob needs `storage:schemes` to be listable
+
+`mosaics/collection.json`'s `partition:glob` is `s3://tge-labs/...`, and Source Cooperative's
+data proxy is not Amazon S3: without a `storage:schemes` entry, rashid 0.4.0's data pass tries to
+resolve `tge-labs` as an AWS bucket, fails to find a region, and silently skips every per-partition
+check (`PTL-DAT-000`, "listing the glob failed: no S3 region found for tge-labs"). A clean
+`--no-data` run, or a `--data` run that never reports `PTL-DAT-006`/`PTL-DAT-007`/etc., proves
+nothing about the 36 partition files in that state.
+
+`storage:schemes` now declares `type: custom-s3`, `platform: https://data.source.coop`, and
+`bucket: tge-labs` (PORTO-FMT-066; the STAC Storage Extension v2.0.0 schema pins `aws-s3`'s
+`platform` to an `*.amazonaws.com` template, so `type: aws-s3` with this platform fails
+validation outright — `custom-s3` is the only type that fits a non-AWS S3-compatible endpoint).
+With it, `rashid check catalog/` (no `--no-data`) anonymously lists the bucket, actually expands
+the glob against the listing, and reports real per-partition findings: `PTL-DAT-006` (info; 4 of 4
+sampled partition files have fewer row groups than the footer check wants) and `PTL-DAT-007`
+(warning; all 36 partition files rely on native GeoParquet statistics without a bbox-covering
+column). Both are non-blocking (not error severity) and describe the published GeoParquet files'
+actual row-group and statistics layout — rewriting them is data work, not something this
+metadata-only catalog edit attempts.
+
+Falsified before trusting it: pointing `partition:glob` at a pattern that cannot match
+(`quarter=*/no-such-file-*.parquet`) still lists the 148 objects under the prefix and reports
+`PTL-DAT-000`, "the glob matches none of the 148 object(s) listed under it" — proof the listing is
+real, not a vacuous pass. Reverted after confirming.
+
+`coverage/collection.json` has no `partition:glob` (`tiles.parquet` is a single collection-level
+asset, not a partitioned table), so it needs no `storage:schemes` entry.
+
 ### Data links in metadata checkouts
 
 Data files remain outside Git.
