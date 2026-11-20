@@ -57,8 +57,8 @@ Do not estimate either value, because readers use them to validate downloads.
 ## Checks
 
 Run the development checks in [README.md](README.md#development) before handing off changes.
-Keep `rashid>=0.1.8,<0.2.0` in the development dependencies and conformance gate.
-Version 0.1.8 is the first release that accepts the absolute root `self` link recommended by Portolan schema v0.2.0.
+Keep `rashid>=0.4.0,<0.5.0` in the development dependencies and conformance gate.
+Version 0.4.0 is the first release that bundles the Portolan v0.3.0 profile this catalog declares.
 
 `CI_LIGHT=1` skips data assets and PMTiles links backed by matching visual assets in a metadata-only checkout.
 Structural links, styles, and thumbnails must still resolve.
@@ -80,6 +80,6 @@ Preserve measurement dates when revising the guides.
 Keep absolute `vcs` and `issues` links in `catalog/catalog.json`, both naming `taylor-geospatial/sentinel-2-quarterly-mosaics`.
 Relative links would resolve against the public bucket URL rather than the repository.
 
-The root also has an absolute `self` link, which Portolan schema v0.2.0 recommends (PORTO-CORE-081) and v0.1.1 forbids.
-Keep the v0.2.0 schema URI on all catalog objects (PORTO-CORE-009).
-Do not mix those versions or lower the `rashid` floor below 0.1.8.
+The root also has an absolute `self` link, which Portolan schema v0.2.0 recommends (PORTO-CORE-081) and v0.1.1 forbids; v0.3.0 keeps the same recommendation.
+Keep the v0.3.0 schema URI on all catalog objects (PORTO-CORE-009).
+Do not mix schema versions across objects, or lower the `rashid` floor below 0.4.0.

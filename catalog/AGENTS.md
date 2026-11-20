@@ -273,6 +273,6 @@ Preserve this documented metadata correction rather than copying the upstream va
 ## Links
 
 Assets and structural links resolve relative to the object containing them.
-The root has an absolute `self` link, as recommended by Portolan schema v0.2.0.
+The root has an absolute `self` link, as recommended by Portolan schema v0.3.0 (and v0.2.0 before it).
 Collections do not have a `self` link, so clients must track their locations.
 Human-facing pages use `source.coop`, and machine reads use `data.source.coop` for the same objects.

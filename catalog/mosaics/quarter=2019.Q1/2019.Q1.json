@@ -2,8 +2,7 @@
   "type": "Feature",
   "stac_version": "1.1.0",
   "stac_extensions": [
-    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
-    "https://schemas.portolan-sdi.org/incubating/partition/v1.0.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.3.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
@@ -87,7 +86,8 @@
         "thumbnail"
       ],
       "file:size": 90138,
-      "file:checksum": "1220e35c78a56d2a2ea484c6b09a1fb96e58c58b11ecdbb71b8f989debf37a1ec2c0"
+      "file:checksum": "1220e35c78a56d2a2ea484c6b09a1fb96e58c58b11ecdbb71b8f989debf37a1ec2c0",
+      "description": "WebP render of this quarter's overview COG (`overview.tif`), downsampled to 1024 px wide with average resampling."
     }
   },
   "links": [

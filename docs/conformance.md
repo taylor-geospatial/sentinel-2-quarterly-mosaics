@@ -12,18 +12,20 @@ Each accepted rule requires a row below explaining where it occurs, why it is ac
 
 ## Validator versions
 
-The conformance check requires rashid `>=0.1.8,<0.2.0`.
+The conformance check requires rashid `>=0.4.0,<0.5.0`.
 It reads `rashid --version` and fails if the version is outside that range or the tool is absent.
 For a missing installation, it prints the install command.
 
-Rashid 0.1.8 is the first release that accepts the absolute root `self` link recommended by Portolan schema v0.2.0 (PORTO-CORE-081).
-The catalog includes that link.
-The check also asserts rules PTL-LNK-007, PTL-LNK-008, PTL-LNK-009, and PTL-AST-006, introduced in 0.1.5.
-Older versions cannot validate those requirements.
+Rashid 0.4.0 is the first release that bundles the Portolan v0.3.0 profile, which this catalog now declares
+(PORTO-CORE-006) in `catalog.json`, both collections, and all 36 `mosaics` partition items. A rashid below
+the floor cannot check the catalog against the version it claims to follow. v0.3.0 is also the version this
+catalog targets for its raster-specific rules: the collection overview COG (`PORTO-FMT-067`-`072`), nodata on
+imagery bands (`PORTO-FMT-073`), and the absolute `partition:glob` and single-file asset rules
+(`PORTO-FMT-064`, `PORTO-FMT-065`).
 The development dependencies and CI use the same version range.
 
-The upper bound prevents an unreviewed 0.2 rule set from changing validation behavior.
-Read the new rules and update both bounds when moving to 0.2.
+The upper bound prevents an unreviewed 0.5 rule set from changing validation behavior.
+Read the new rules and update both bounds when moving past 0.4.
 
 ## Accepted deviations
 
@@ -53,7 +55,9 @@ python3 tools/make_coverage_thumbnail.py --source .cache/coverage/tiles.parquet
 The generator prints the source SHA-256, row and tile counts, quarters, and thumbnail size and SHA-256.
 The source used for this thumbnail has SHA-256 `e413f9c88c6fe8b940fbd207494d1d12d37d0af5b9ceb74275477d7eb10bb38a`.
 Refresh the collection metadata and thumbnail together after rebuilding coverage.
-The thumbnail omits `file:size` and `file:checksum` until its bytes are published.
+The thumbnail's bytes are now published (confirmed by a 2026-11-20 HEAD request against the live object); `file:size` 6478 and `file:checksum`
+`1220dee6b5c0df4de105347e1340d1ebf31a1922a32efffd7708e479291a234d6e11` were added to `coverage/collection.json` accordingly, computed from the
+tracked `catalog/coverage/thumbnail.webp`, which is byte-identical to the published object.
 The data asset hashes describe files already in the public bucket.
 
 ### Data links in metadata checkouts
