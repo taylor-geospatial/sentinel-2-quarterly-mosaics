@@ -40,16 +40,16 @@ ACCEPTED: set[str] = set()
 config = load_config()
 target = ROOT / config["publish_dir"]
 
-# 0.1.8 is the first rashid that accepts the absolute root `self` link that
-# Portolan schema v0.2.0 recommends (PORTO-CORE-081); below it this catalog's
-# root fails on a link the spec asks for. Rules PTL-LNK-007, PTL-LNK-008,
-# PTL-LNK-009 and PTL-AST-006 arrived in 0.1.5 and this gate asserts all four.
-# A rashid below the floor reports a pass for a catalog it never checked
-# against them. The upper bound stops an unreviewed 0.2 rule set from changing
-# what this gate means.
-MIN_VERSION = (0, 1, 8)
-MAX_VERSION = (0, 2, 0)
-SPEC = "rashid>=0.1.8,<0.2.0"
+# 0.4.0 is the first rashid release that bundles the Portolan v0.3.0 profile
+# (raster overview-COG, classification-extension, and nodata rules; the
+# PORTO-FMT-064/065 absolute-glob and single-file rules; table:columns and
+# asset title/description SHOULDs). This catalog declares v0.3.0 in
+# `stac_extensions` (PORTO-CORE-006), so a rashid below the floor cannot check
+# it against the version it claims. The upper bound stops an unreviewed 0.5
+# rule set from changing what this gate means without review.
+MIN_VERSION = (0, 4, 0)
+MAX_VERSION = (0, 5, 0)
+SPEC = "rashid>=0.4.0,<0.5.0"
 INSTALL = f"python -m pip install '{SPEC}'"
 
 

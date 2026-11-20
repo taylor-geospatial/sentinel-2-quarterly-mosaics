@@ -2,7 +2,7 @@
   "type": "Collection",
   "stac_version": "1.1.0",
   "stac_extensions": [
-    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://schemas.portolan-sdi.org/portolan/v0.3.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json"
@@ -178,7 +178,9 @@
       "roles": [
         "thumbnail"
       ],
-      "description": "Number of distinct quarters per subtile, rendered from the published tiles.parquet on 2026-11-04 in Web Mercator with the default style's fill colours, opacity, and background. It shows 34,916 footprints across 36 quarters. Color shows how many quarters include each tile, not the fraction of valid pixels."
+      "description": "Number of distinct quarters per subtile, rendered from the published tiles.parquet on 2026-11-04 in Web Mercator with the default style's fill colours, opacity, and background. It shows 34,916 footprints across 36 quarters. Color shows how many quarters include each tile, not the fraction of valid pixels.",
+      "file:size": 6478,
+      "file:checksum": "1220dee6b5c0df4de105347e1340d1ebf31a1922a32efffd7708e479291a234d6e11"
     }
   },
   "links": [

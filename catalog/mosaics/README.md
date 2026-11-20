@@ -116,3 +116,10 @@ Do not use that unfinished transfer as data.
 
 The additional `manifest_2026_Q2.parquet` brings the documented manifest glob count to 37 files.
 Filter on `year <= 2025` to select the 36 quarters described by this collection.
+
+## License
+
+These bands mirror the Copernicus Sentinel-2 Global Mosaics under the [Legal Notice on the Use of Copernicus Sentinel Data and Service Information](https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice).
+They contain modified Copernicus Sentinel data.
+Attribute the underlying imagery as "Copernicus Sentinel data 2017–2025".
+Taylor Geospatial Engine's mirroring adds no restrictions.
